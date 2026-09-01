@@ -116,8 +116,8 @@ export function coordsToPkgDeps(dependencies) {
   for (const [coord, version] of Object.entries(dependencies ?? {})) {
     const git = parseGitCoord(coord);
     if (git) {
-      out[git.name] =
-        `github:${git.owner}/${git.repo}#${version}` + (git.subpath ? `&path:${git.subpath}` : '');
+      const ref = version === 'latest' ? '' : `#${version}`;
+      out[git.name] = `github:${git.owner}/${git.repo}${ref}` + (git.subpath ? `&path:${git.subpath}` : '');
     } else {
       out[coord] = version; // npm 精确版本，原样保留
     }
@@ -165,8 +165,8 @@ export function isExactSemver(v) {
 
 /**
  * 生成 v4 dependencies（坐标→固定版本）：
- * - git 依赖：commit sha 优先取 package.json 的 `#sha`，缺则从 pnpm-lock.yaml 的 resolution.commit 补齐，
- *   仍缺则抛错（v3/v4 要求 git 依赖钉死 sha，静默写空会产出非法 manifest）；
+ * - git 依赖：commit sha 优先取 package.json 的 `#sha`，缺则从 pnpm-lock.yaml 的 resolution.commit 补齐；
+ *   都没有则标记为 `latest`（安装时跟随默认分支最新，不强制钉 sha）；
  * - npm 依赖若仍是范围（^/~ 等），读 node_modules/<name>/package.json 的实测版本钉精确。
  */
 export async function coordinatesFromProfileDeps(host, dir, deps) {
@@ -176,17 +176,9 @@ export async function coordinatesFromProfileDeps(host, dir, deps) {
   for (const [pkgName, spec] of Object.entries(deps)) {
     const git = parsePkgGitSpec(spec);
     if (git) {
+      // 不强制钉 sha：spec 里的 #sha 优先，其次 pnpm-lock 的 resolution.commit；都没有则标记 latest（跟随默认分支最新）。
       const sha = git.sha || gitCommitFromLock(lockText, pkgName);
-      if (!sha) {
-        const example = git.owner && git.repo
-          ? `github:${git.owner}/${git.repo}${git.subpath ? `&path:${git.subpath}` : ''}#<commit-sha>`
-          : 'github:owner/repo#<commit-sha>';
-        throw new Error(
-          `git 依赖「${pkgName}」缺少 commit sha：请把 package.json 里该依赖写成 \`${example}\`，` +
-            `或在 profile 目录执行 pnpm install 生成 pnpm-lock.yaml 后再导出`,
-        );
-      }
-      out[`github:${git.owner}/${git.repo}${git.subpath ? `#path:/${git.subpath}` : ''}`] = sha;
+      out[`github:${git.owner}/${git.repo}${git.subpath ? `#path:/${git.subpath}` : ''}`] = sha || 'latest';
       continue;
     }
     if (typeof spec === 'string' && spec && !isExactSemver(spec)) {

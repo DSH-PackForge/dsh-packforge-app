@@ -45,6 +45,19 @@ test('正向：坐标 → package.json 依赖（v3 §5 三态）', () => {
   );
 });
 
+test('正向：git latest → 不带 #（跟随默认分支最新）', () => {
+  assert.deepEqual(
+    coordsToPkgDeps({
+      'github:a/b': 'latest',
+      'github:a/b#path:/pkg': 'latest',
+    }),
+    {
+      b: 'github:a/b',
+      pkg: 'github:a/b&path:pkg',
+    },
+  );
+});
+
 test('反向：package.json 依赖 → 坐标', () => {
   assert.deepEqual(
     pkgDepsToCoords({

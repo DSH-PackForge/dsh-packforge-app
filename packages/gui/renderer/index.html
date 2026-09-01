@@ -19,17 +19,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
           <span>市场</span>
         </button>
-        <button data-tab="view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>
-          <span>查看整合包</span>
+        <button data-tab="import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7.5 8.5 4.5 4.5 4.5-4.5"/></svg>
+          <span>导入</span>
         </button>
         <button data-tab="export">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/></svg>
           <span>导出</span>
         </button>
-        <button data-tab="import">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7.5 8.5 4.5 4.5 4.5-4.5"/></svg>
-          <span>导入</span>
+        <button data-tab="view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>
+          <span>查看整合包</span>
         </button>
       </nav>
 
@@ -53,19 +53,6 @@
             <button id="market-reload" class="ghost">⟳ 刷新</button>
           </div>
           <div id="market-out" class="grid"></div>
-        </section>
-
-        <!-- 查看整合包 -->
-        <section id="pane-view" class="pane" hidden>
-          <div class="pane-head">
-            <div>
-              <h1>查看整合包</h1>
-              <p class="sub">打开 .dspack，查看结构与校验结果</p>
-            </div>
-            <button id="view-open" class="primary">选择 .dspack…</button>
-          </div>
-          <span id="view-path" class="view-path mono"></span>
-          <div class="panel"><div id="view-out"></div></div>
         </section>
 
         <!-- 导出 -->
@@ -214,6 +201,19 @@
             <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
           </div>
           <pre id="import-out" class="result"></pre>
+        </section>
+
+        <!-- 查看整合包 -->
+        <section id="pane-view" class="pane" hidden>
+          <div class="pane-head">
+            <div>
+              <h1>查看整合包</h1>
+              <p class="sub">打开 .dspack，查看结构与校验结果</p>
+            </div>
+            <button id="view-open" class="primary">选择 .dspack…</button>
+          </div>
+          <span id="view-path" class="view-path mono"></span>
+          <div class="panel"><div id="view-out"></div></div>
         </section>
       </main>
 

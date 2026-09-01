@@ -87,7 +87,7 @@ test('导出：git 依赖无 #sha 时从 pnpm-lock 补齐 commit', async () => {
   }
 });
 
-test('导出：git 依赖无 sha 且无 lock 报错（不产出空坐标）', async () => {
+test('导出：git 依赖无 sha 且无 lock → 标记 latest（跟随默认分支最新）', async () => {
   const host = new NodeHost();
   const root = await host.mkdtemp('pfx-gitnope-');
   try {
@@ -96,7 +96,8 @@ test('导出：git 依赖无 sha 且无 lock 报错（不产出空坐标）', as
       host.joinPath(dir, 'package.json'),
       JSON.stringify({ dependencies: { whale: 'git+https://github.com/DViridescent/dafy-whale-theme.git' } }),
     );
-    await assert.rejects(() => buildManifest(host, { name: 'x', dir }, {}), /缺少 commit sha/);
+    const m = await buildManifest(host, { name: 'x', dir }, {});
+    assert.equal(m.dependencies['github:DViridescent/dafy-whale-theme'], 'latest');
   } finally {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }
