@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML, exportRepoResultHTML, specialHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML, exportRepoResultHTML, specialHTML, specialFieldHTML } from '../src/format.js';
 
 const FIXTURE = {
   sha256: 'a'.repeat(64),
@@ -127,6 +127,21 @@ test('specialHTML：渲染特殊目录摘要（skill/agent-preset/icon）', () =
 test('specialHTML：无内容返回空串', () => {
   assert.equal(specialHTML({ skills: [], agentPresets: [], icons: [] }), '');
   assert.equal(specialHTML(undefined), '');
+});
+
+test('specialFieldHTML：空时也始终三行（均显示「无」）', () => {
+  const html = specialFieldHTML({ skills: [], agentPresets: [], icons: [] });
+  assert.match(html, /Skill/);
+  assert.match(html, /Agent 预设/);
+  assert.match(html, /图标/);
+  assert.equal((html.match(/无/g) || []).length, 3);
+});
+
+test('specialFieldHTML：列出识别到的名称', () => {
+  const html = specialFieldHTML({ skills: [{ name: 'fmt' }], agentPresets: [{ id: 'code' }], icons: ['icons/logo.png'] });
+  assert.match(html, /1 个 · fmt/);
+  assert.match(html, /1 个 · code/);
+  assert.match(html, /icons\/logo\.png/);
 });
 
 test('exportResultHTML：渲染成功结果', () => {

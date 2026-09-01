@@ -1,5 +1,5 @@
 // 渲染进程逻辑（浏览器 ESM，仅依赖纯展示模块 format.js + Electron 桥 window.packforge）。
-import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML, exportRepoResultHTML, specialFieldHTML } from '../src/format.js';
 
 const bridge = window.packforge ?? null;
 const $ = (id) => document.getElementById(id);
@@ -228,6 +228,7 @@ async function updatePreview() {
     box.innerHTML = '<p class="muted">选择 Profile 后显示打包预览</p>';
     $('export-files-field').hidden = true;
     $('export-files').innerHTML = '';
+    $('export-special').innerHTML = '<span class="muted">选择 Profile 后显示</span>';
     return;
   }
   box.innerHTML = '<p class="muted">扫描中…</p>';
@@ -235,6 +236,7 @@ async function updatePreview() {
     const ins = await bridge.inspectProfile({ profile: { name: p.name, dir: p.dir }, ...exportOpts() });
     exportAllFiles = ins.allFiles ?? ins.files ?? [];
     renderFilePicker();
+    $('export-special').innerHTML = specialFieldHTML(ins.special);
     box.innerHTML = exportPreviewHTML(ins);
   } catch (e) {
     box.innerHTML = `<p class="err">预览失败：${escape(e.message)}</p>`;

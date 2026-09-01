@@ -163,6 +163,18 @@ export function specialHTML(sp) {
   return `<h4 class="special-head">特殊目录</h4><table class="kv">${rows.join('')}</table>`;
 }
 
+/** 特殊目录常驻展示（导出表单区的信息块）：始终三行，空显示「无」。 */
+export function specialFieldHTML(sp) {
+  const s = sp?.skills ?? [];
+  const a = sp?.agentPresets ?? [];
+  const ic = sp?.icons ?? [];
+  const line = (key, inner) => `<div class="sp-line"><span class="sp-key">${key}</span><span>${inner}</span></div>`;
+  const skillV = s.length ? `${s.length} 个 · ${s.map((x) => escapeHtml(x.name)).join(', ')}` : '<span class="muted">无</span>';
+  const presetV = a.length ? `${a.length} 个 · ${a.map((x) => escapeHtml(x.id)).join(', ')}` : '<span class="muted">无</span>';
+  const iconV = ic.length ? `<span class="mono">${ic.map(escapeHtml).join(', ')}</span>` : '<span class="muted">无</span>';
+  return line('Skill', skillV) + line('Agent 预设', presetV) + line('图标', iconV);
+}
+
 /** 导出成功结果 → HTML（外框 ok/err 由 app.js 决定）。 */
 export function exportResultHTML(r) {
   return `
