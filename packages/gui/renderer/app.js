@@ -66,21 +66,44 @@ async function openPackView() {
 
 /* ---- 导出 ---- */
 let exportProfiles = [];
+let exportRoots = [];
 
-const profileLabel = (p) => `${p.name} · ${p.source === 'classic' ? '经典 ~/.dsh' : (p.home || '启动器')}`;
+const homeLabel = (r) => (r.source === 'classic' ? '经典 ~/.dsh' : `启动器 · ${r.home || r.root}`);
+
+function profilesForRoot(root) {
+  if (!root) return exportProfiles;
+  return exportProfiles.filter((p) => p.source === root.source && p.home === root.home);
+}
+
+function renderHomes() {
+  const sel = $('export-home');
+  sel.innerHTML = exportRoots.length
+    ? exportRoots.map((r, i) => `<option value="${i}">${escape(homeLabel(r))}</option>`).join('')
+    : '<option value="">（未发现 DSH-HOME）</option>';
+}
+
+function renderProfiles() {
+  const idx = $('export-home').value;
+  const root = idx === '' ? null : exportRoots[Number(idx)];
+  const list = profilesForRoot(root);
+  const sel = $('export-profile');
+  sel.innerHTML = list.length
+    ? list.map((p) => `<option value="${escape(p.dir)}">${escape(p.name)}</option>`).join('')
+    : '<option value="">（此 HOME 下无 Profile）</option>';
+}
 
 async function initExport() {
   try {
     const r = await bridge.listProfiles();
     exportProfiles = Array.isArray(r) ? r : (r?.profiles ?? []);
+    exportRoots = Array.isArray(r) ? [] : (r?.roots ?? []);
   } catch {
     exportProfiles = [];
+    exportRoots = [];
   }
 
-  const sel = $('export-profile');
-  sel.innerHTML = exportProfiles.length
-    ? exportProfiles.map((p) => `<option value="${escape(p.dir)}">${escape(profileLabel(p))}</option>`).join('')
-    : '<option value="">（未发现 Profile）</option>';
+  renderHomes();
+  renderProfiles();
 
   const vsel = $('export-dsh');
   let versions = [];
@@ -207,6 +230,7 @@ function init() {
   });
   $('view-open').addEventListener('click', openPackView);
   $('export-go').addEventListener('click', doExport);
+  $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
   $('export-profile').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
