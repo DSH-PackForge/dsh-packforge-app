@@ -1,0 +1,48 @@
+{
+  "name": "@dsh-packforge/gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.mjs",
+  "description": "DSH PackForge 桌面端（Electron）：市场浏览 / 导出 / 导入 / 查看整合包",
+  "license": "MIT",
+  "author": "DSH PackForge",
+  "scripts": {
+    "start": "electron electron/main.mjs",
+    "test": "node --test --experimental-test-isolation=none \"test/*.test.js\"",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "@dsh-packforge/core": "workspace:*",
+    "@dsh-packforge/host-node": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.dsh-packforge.app",
+    "productName": "DSH PackForge",
+    "copyright": "MIT",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

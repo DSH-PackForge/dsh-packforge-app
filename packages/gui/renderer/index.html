@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DSH PackForge</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="app-bar">
+    <div class="brand">DSH <b>PackForge</b></div>
+    <nav>
+      <button data-tab="market" class="active">市场</button>
+      <button data-tab="view">查看整合包</button>
+      <button data-tab="export">导出</button>
+      <button data-tab="import">导入</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="pane-market" class="pane">
+      <div class="toolbar"><button id="market-reload">刷新市场</button></div>
+      <div id="market-out" class="grid"></div>
+    </section>
+
+    <section id="pane-view" class="pane" hidden>
+      <div class="toolbar"><button id="view-open">选择 .dspack…</button><span id="view-path" class="muted"></span></div>
+      <div id="view-out"></div>
+    </section>
+
+    <section id="pane-export" class="pane" hidden>
+      <div class="export-layout">
+        <div class="form">
+          <div class="field">
+            <label for="export-profile">Profile</label>
+            <div class="row">
+              <select id="export-profile"></select>
+              <button id="export-refresh" class="ghost" title="重新扫描">⟳</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="export-display">展示名</label>
+            <input id="export-display" placeholder="默认用 Profile 名" />
+          </div>
+          <div class="field">
+            <label for="export-dsh">DSH 版本</label>
+            <select id="export-dsh" title="钉定到已装版本；留空取最新"></select>
+          </div>
+          <div class="field">
+            <label for="export-out">输出目录</label>
+            <div class="row">
+              <input id="export-out" placeholder="默认当前目录" />
+              <button id="export-browse" class="ghost">浏览…</button>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="export-go" class="primary">打包导出</button>
+            <span id="export-busy" class="muted" hidden>正在打包…</span>
+          </div>
+        </div>
+
+        <aside id="export-preview" class="panel">
+          <p class="muted">选择 Profile 后显示打包预览</p>
+        </aside>
+      </div>
+
+      <div id="export-result" class="result" hidden></div>
+    </section>
+
+    <section id="pane-import" class="pane" hidden>
+      <div class="form">
+        <label>整合包
+          <div class="row">
+            <input id="import-source" placeholder="本地 .dspack 路径或 URL" />
+            <button id="import-browse">浏览…</button>
+          </div>
+        </label>
+        <label>安装名（覆盖 manifest）<input id="import-name" placeholder="可选" /></label>
+        <label>目标根 <input id="import-root" placeholder="默认 ~/.dsh/profiles" /></label>
+        <label class="check"><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</label>
+        <div class="toolbar"><button id="import-go">安装</button></div>
+      </div>
+      <pre id="import-out" class="result"></pre>
+    </section>
+  </main>
+
+  <footer id="status" class="status"></footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

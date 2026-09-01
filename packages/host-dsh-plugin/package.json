@@ -1,0 +1,31 @@
+{
+  "name": "@dsh-packforge/host-dsh-plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DSH-PackForge Host 的 DSH 客户端插件适配（ctx.fs/ctx.shell + WebCrypto sha256）",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "dspack",
+    "整合包"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test --experimental-test-isolation=none \"test/*.test.js\""
+  },
+  "dependencies": {
+    "@dsh-packforge/core": "workspace:*"
+  }
+}

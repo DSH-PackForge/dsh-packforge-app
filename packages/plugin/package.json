@@ -1,0 +1,45 @@
+{
+  "name": "@dsh-packforge/plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DSH 客户端插件：在 DSH Web GUI 内导出/导入/市场浏览/查看整合包（core + host-dsh-plugin）",
+  "license": "MIT",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./lib/client.js"
+  },
+  "files": [
+    "src",
+    "lib"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "dspack",
+    "整合包",
+    "cordis"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test --experimental-test-isolation=none \"test/*.test.js\"",
+    "bundle": "esbuild src/client.js --bundle --format=iife --platform=browser --target=es2020 --outfile=lib/client.js"
+  },
+  "dependencies": {
+    "@dsh-packforge/core": "workspace:*",
+    "@dsh-packforge/host-dsh-plugin": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

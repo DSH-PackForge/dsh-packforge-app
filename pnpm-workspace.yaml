@@ -1,0 +1,14 @@
+packages:
+  - packages/*
+
+allowBuilds:
+  esbuild: set this to true or false
+
+# 放行这两个包的安装脚本（electron 下载二进制 / esbuild 挂载平台二进制）。
+# 注：pnpm 11 的正名字段是 onlyBuiltDependencies（数组），不是 allowBuilds。
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+
+# 把 store 固定到工作区内，避免 pnpm 默认把 store 放到工作区上层污染父目录（历史坑）
+storeDir: node_modules/.pnpm-store
