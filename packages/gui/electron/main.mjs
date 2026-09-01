@@ -2,6 +2,7 @@
 // 职责：注册 IPC，把渲染进程的调用转发给 `@dsh-packforge/core` + NodeHost。
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -9,7 +10,21 @@ const { NodeHost } = await import('@dsh-packforge/host-node');
 const core = await import('@dsh-packforge/core');
 const host = new NodeHost();
 
-const MARKET_INDEX = process.env.DSHPACK_MARKET_INDEX || '';
+/** 解析市场索引：环境变量优先，其次随包内置 / 同级 dsh-pack-market 仓库。 */
+function resolveMarketIndex() {
+  if (process.env.DSHPACK_MARKET_INDEX) return process.env.DSHPACK_MARKET_INDEX;
+  const candidates = [
+    path.join(__dirname, '..', 'market', 'index.json'),                                   // packages/gui/market/index.json
+    path.join(__dirname, '..', '..', 'market', 'index.json'),                             // dsh-packforge-app/market/index.json
+    path.join(__dirname, '..', '..', '..', '..', 'dsh-pack-market', 'index', 'index.json'), // 同级仓库 dsh-pack-market
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return '';
+}
+
+const MARKET_INDEX = resolveMarketIndex();
 
 function registerIpc() {
   ipcMain.handle('dialog:selectFile', async (_e, filters) => {
@@ -33,7 +48,7 @@ function registerIpc() {
   ipcMain.handle('pack:install', (_e, opts) => core.installPack(host, opts));
 
   ipcMain.handle('market:list', async () => {
-    if (!MARKET_INDEX) return { schemaVersion: 1, generatedAt: null, packs: [] };
+    if (!MARKET_INDEX) return { schemaVersion: 1, generatedAt: null, packs: [], error: '未找到市场索引（未设置 DSHPACK_MARKET_INDEX，且未发现 market/index.json）' };
     try {
       return await core.readMarketIndex(host, MARKET_INDEX);
     } catch (e) {
