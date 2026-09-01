@@ -10,6 +10,8 @@ import https from 'node:https';
 import { spawnSync } from 'node:child_process';
 
 export class NodeHost {
+  #rootCAs;
+
   joinPath(...parts) {
     return path.join(...parts);
   }
@@ -128,6 +130,23 @@ export class NodeHost {
   }
 
   async download(url, destAbs) {
+    try {
+      await this.#downloadOnce(url, destAbs, null);
+    } catch (e) {
+      // Windows 上部分站点（如 github.com）的证书链只认系统根 CA，Node bundled CA 认不到时
+      // 自动加载系统根 CA 重试一次（信任系统信任存储，而非禁用校验）。
+      if (this.#isCertError(e)) {
+        const cas = await this.#systemRootCAs();
+        if (cas && cas.length) {
+          await this.#downloadOnce(url, destAbs, cas);
+          return;
+        }
+      }
+      throw e;
+    }
+  }
+
+  async #downloadOnce(url, destAbs, extraCa) {
     await new Promise((resolve, reject) => {
       let u;
       try {
@@ -137,10 +156,12 @@ export class NodeHost {
       }
       const lib = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
       if (!lib) return reject(new Error(`仅支持 http/https：${url}`));
-      const req = lib.get(url, { headers: { 'user-agent': 'dspack/0.1.0' } }, (res) => {
+      const options = { headers: { 'user-agent': 'dspack/0.1.0' } };
+      if (extraCa) options.ca = extraCa;
+      const req = lib.get(url, options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
-          return resolve(this.download(new URL(res.headers.location, u).href, destAbs));
+          return resolve(this.#downloadOnce(new URL(res.headers.location, u).href, destAbs, extraCa));
         }
         if (res.statusCode !== 200) {
           res.resume();
@@ -154,6 +175,28 @@ export class NodeHost {
       req.on('error', reject);
       req.setTimeout(30_000, () => req.destroy(new Error('下载超时（30s）')));
     });
+  }
+
+  #isCertError(e) {
+    const m = String(e?.code ?? '') + ' ' + String(e?.message ?? '');
+    return /UNABLE_TO_VERIFY|SELF_SIGNED|CERT_HAS_EXPIRED|UNABLE_TO_GET_ISSUER|verify the first certificate|ERR_TLS_CERT/i.test(m);
+  }
+
+  async #systemRootCAs() {
+    if (this.#rootCAs !== undefined) return this.#rootCAs;
+    this.#rootCAs = null;
+    if (process.platform !== 'win32') return this.#rootCAs;
+    try {
+      const script = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-ChildItem Cert:\\LocalMachine\\Root, Cert:\\CurrentUser\\Root | ForEach-Object { '-----BEGIN CERTIFICATE-----'; [System.Convert]::ToBase64String($_.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert), 'InsertLineBreaks'); '-----END CERTIFICATE-----' }";
+      const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+        encoding: 'utf8', timeout: 15000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
+      });
+      const cas = [...String(r.stdout ?? '').matchAll(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g)].map((m) => m[0]);
+      if (cas.length) this.#rootCAs = cas;
+    } catch {
+      this.#rootCAs = null;
+    }
+    return this.#rootCAs;
   }
 
   async move(from, to) {

@@ -178,9 +178,12 @@ export async function coordinatesFromProfileDeps(host, dir, deps) {
     if (git) {
       const sha = git.sha || gitCommitFromLock(lockText, pkgName);
       if (!sha) {
+        const example = git.owner && git.repo
+          ? `github:${git.owner}/${git.repo}${git.subpath ? `&path:${git.subpath}` : ''}#<commit-sha>`
+          : 'github:owner/repo#<commit-sha>';
         throw new Error(
-          `git 依赖「${pkgName}」缺少 commit sha：请把 package.json 的版本写成 ${typeof spec === 'string' ? spec : '#<commit-sha>'}#<commit-sha>` +
-            `，或先执行 pnpm install 生成 pnpm-lock.yaml 再导出`,
+          `git 依赖「${pkgName}」缺少 commit sha：请把 package.json 里该依赖写成 \`${example}\`，` +
+            `或在 profile 目录执行 pnpm install 生成 pnpm-lock.yaml 后再导出`,
         );
       }
       out[`github:${git.owner}/${git.repo}${git.subpath ? `#path:/${git.subpath}` : ''}`] = sha;
