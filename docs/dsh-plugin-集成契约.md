@@ -250,3 +250,16 @@ ctx.systemPrompt.section({
 - **真实 DSH 联调是最大 gap**：沙箱起不了 DSH Web GUI，`ctx.tools` / `ctx.slots` 目前只能靠 mock ctx 单测验证，最终要在真实 DSH 里跑一次。
 - **host 插件的「安装进 DSH」途径未确证**：需再查 `@deepseek-ai/dsh-host-plugin-inventory` 包，确认第三方 host 插件如何被用户安装进 DSH（npm 装包后如何在 cordis host 装载清单里启用）。
 - **client GUI 与 host 能力的一致性**：第一版 client 走 `ctx.shell`+CLI、host 工具直接调 core，两者共享 core 保证行为一致；后续如需更紧的 client↔host 联动，再引入 remote API 契约。
+
+---
+
+## 6. 实现状态（本轮已落地）
+
+- **需求 1（AI 自主导出）**：`packages/host-plugin/` —— 4 个手写 ToolDefinition（`dspack_list/dspack_export/dspack_view/dspack_install`），
+  **零 @deepseek-ai/* 运行时依赖**（`ToolDefinition.parameters` 直接写标准 JSON Schema，不 import `defineTool`），
+  execute 走 `NodeHost` + `@dsh-packforge/core`；`apply(ctx)` 注册工具 + `ctx.systemPrompt.section`（order 150）引导。5 测试（含 export→view→install 端到端）。
+- **需求 2（设置面板「整合包」）**：`packages/plugin/` —— 新增 `src/settings.js`（`registerSettingsSection` + `DspackSection` React 组件），
+  `apply` 里注册 `settings.section`（id=`dspack`、order=20、双语 label）；`dsh.client.inject` 增 `ui-settings/locale/ui-slots`、peerDeps、react devDep；
+  bundle 标 `--external:react --external:@deepseek-ai/*`。
+- **验证**：全量 75 测试绿（core 46 + gui 11 + plugin 10 + host-dsh-plugin 3 + host-plugin 5）。
+- **坑**：`plugin` 的 bundle 测试因 react external 需用 `createRequire` 模拟 DSH 浏览器模块系统（否则 Node ESM 下顶层 `__require("react")` 抛「Dynamic require not supported」）。

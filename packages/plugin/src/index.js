@@ -16,6 +16,7 @@
 //   `ctx.fs.readBytes + WebCrypto sha256` 只用于「把用户交给 UI 的 .dspack 字节流在浏览器内就地查看」。
 import { createDshPluginHost, isDshBridgeSupported } from '@dsh-packforge/host-dsh-plugin';
 import * as core from '@dsh-packforge/core';
+import { registerSettingsSection } from './settings.js';
 
 export const name = 'dsh-packforge';
 
@@ -98,16 +99,14 @@ export function dshBridgeFromContext(ctx) {
 export async function apply(ctx) {
   const bridge = dshBridgeFromContext(ctx);
   const shell = firstDefined(ctx?.shell, ctx?.dsh?.shell);
-  if (!bridge) return;
-
-  const host = isDshBridgeSupported(bridge) ? createDshPluginHost(bridge) : null;
+  const host = bridge && isDshBridgeSupported(bridge) ? createDshPluginHost(bridge) : null;
 
   const capabilities = {
-    readText: true,
-    readBinary: true,
-    writeText: true,
-    stats: true,
-    listDir: true,
+    readText: !!bridge,
+    readBinary: !!bridge,
+    writeText: !!bridge,
+    stats: !!bridge,
+    listDir: !!bridge,
     binaryWrite: false,  // ctx.fs 无 writeBytes
     mkdir: false,
     rm: false,
@@ -123,10 +122,15 @@ export async function apply(ctx) {
     shell: (argv) => execViaShell(shell, 'dspack', argv),
   };
 
+  const packforge = { host, api, capabilities };
+
+  // 需求 2：设置面板「整合包」section（运行时提供 slots+locale 服务时注册；缺失静默跳过）。
+  registerSettingsSection(ctx, packforge);
+
   if (ctx && typeof ctx.provide === 'function') {
-    try { ctx.provide('dsh-packforge', { host, api, capabilities }); } catch { /* 形态不匹配则忽略 */ }
+    try { ctx.provide('dsh-packforge', packforge); } catch { /* 形态不匹配则忽略 */ }
   }
-  return { host, api, capabilities };
+  return packforge;
 }
 
 // —— 内部 ——

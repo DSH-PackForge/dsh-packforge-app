@@ -1,4 +1,11 @@
 (() => {
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+
   // ../core/src/host.js
   var Host = class {
     /** 连接路径片段为绝对路径（Node: path.join）。 */
@@ -364,8 +371,8 @@
       throw e;
     return e;
   };
-  var inflt = function(dat, st, buf, dict) {
-    var sl = dat.length, dl = dict ? dict.length : 0;
+  var inflt = function(dat, st, buf, dict2) {
+    var sl = dat.length, dl = dict2 ? dict2.length : 0;
     if (!sl || st.f && !st.l)
       return buf || new u8(0);
     var noBuf = !buf;
@@ -493,7 +500,7 @@
             if (shift + bt < 0)
               err(3);
             for (; bt < dend; ++bt)
-              buf[bt] = dict[shift + bt];
+              buf[bt] = dict2[shift + bt];
           }
           for (; bt < end; ++bt)
             buf[bt] = buf[bt - dt];
@@ -790,6 +797,108 @@
     }
   };
 
+  // src/settings.js
+  var import_react = __require("react");
+  var NS = "dspack";
+  var dict = {
+    zh: {
+      nav: "\u6574\u5408\u5305",
+      title: "\u6574\u5408\u5305",
+      intro: "\u7BA1\u7406 DSH \u6574\u5408\u5305\uFF08.dspack\uFF09\u3002\u5BFC\u51FA/\u5BFC\u5165/\u5E02\u573A\u5728 host \u4FA7\u7ECF dspack CLI \u5B8C\u6210\uFF0C\u5C31\u5730\u67E5\u770B\u8D70\u6D4F\u89C8\u5668\u5185\u89E3\u6790\u3002",
+      "action.list": "\u5217\u51FA Profile",
+      "action.market": "\u6D4F\u89C8\u5E02\u573A",
+      note: "\u5B8C\u6574\u5BFC\u51FA/\u5BFC\u5165\u4E5F\u53EF\u76F4\u63A5\u5BF9 AI \u8BF4\uFF08\u7531 dspack_export / dspack_install \u5DE5\u5177\u63A5\u7BA1\uFF09\u3002"
+    },
+    en: {
+      nav: "Modpacks",
+      title: "Modpacks",
+      intro: "Manage DSH integration packs (.dspack). Export/import/market run on the host via the dspack CLI.",
+      "action.list": "List profiles",
+      "action.market": "Browse market",
+      note: "You can also ask the AI directly to export or install a pack."
+    }
+  };
+  function registerSettingsSection(ctx, packforge = {}) {
+    const slots = ctx?.slots;
+    const locale = ctx?.locale;
+    if (!slots || typeof slots.inject !== "function") return false;
+    if (!locale || typeof locale.register !== "function" || typeof locale.bind !== "function") return false;
+    const registerLocale = () => locale.register(NS, dict);
+    if (typeof ctx.effect === "function") ctx.effect(registerLocale, "dspack: settings dict");
+    else registerLocale();
+    const t = locale.bind(NS);
+    slots.inject(
+      "settings.section",
+      () => slots.register(
+        {
+          name: "settings.section",
+          id: "dspack",
+          order: 20,
+          // 通用=0 / 模型=10 / 插件=15 → 放最后
+          label: () => t("nav"),
+          inject: () => ({ t, packforge })
+        },
+        DspackSection
+      )
+    );
+    return true;
+  }
+  function DspackSection({ t, packforge }) {
+    const api = packforge?.api;
+    const shell = typeof api?.shell === "function" ? api.shell : null;
+    const actions = [
+      { label: t("action.list"), run: () => shell(["list"]) },
+      { label: t("action.market"), run: () => shell(["market"]) }
+    ];
+    const style = {
+      section: { display: "flex", flexDirection: "column", gap: 12, maxWidth: 720, padding: "8px 0" },
+      title: { margin: 0, fontSize: 16, fontWeight: 500, lineHeight: "24px" },
+      intro: { margin: 0, fontSize: 14, lineHeight: "22px", color: "var(--dsw-alias-label-tertiary)" },
+      actions: { display: "flex", gap: 8, margin: 0, padding: 0, listStyle: "none" },
+      btn: {
+        height: 36,
+        padding: "0 14px",
+        borderRadius: 18,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 14,
+        lineHeight: "22px",
+        background: "var(--dsw-alias-button-primary-fill)",
+        color: "var(--dsw-alias-label-primary-foreground)",
+        font: "inherit"
+      },
+      note: { margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--dsw-alias-label-tertiary)" }
+    };
+    return (0, import_react.createElement)(
+      "div",
+      { style: style.section },
+      (0, import_react.createElement)("h2", { style: style.title }, t("title")),
+      (0, import_react.createElement)("p", { style: style.intro }, t("intro")),
+      (0, import_react.createElement)(
+        "ul",
+        { style: style.actions },
+        actions.map(
+          (a) => (0, import_react.createElement)(
+            "li",
+            { key: a.label },
+            (0, import_react.createElement)("button", {
+              type: "button",
+              style: style.btn,
+              disabled: !shell,
+              onClick: () => {
+                try {
+                  a.run();
+                } catch {
+                }
+              }
+            }, a.label)
+          )
+        )
+      ),
+      (0, import_react.createElement)("p", { style: style.note }, t("note"))
+    );
+  }
+
   // src/index.js
   var name = "dsh-packforge";
   var viewPackBytes = (bytes) => inspectPack({ readFile: async () => bytes, sha256: sha256Bytes }, bytes);
@@ -855,14 +964,13 @@
   async function apply(ctx) {
     const bridge = dshBridgeFromContext(ctx);
     const shell = firstDefined(ctx?.shell, ctx?.dsh?.shell);
-    if (!bridge) return;
-    const host = isDshBridgeSupported(bridge) ? createDshPluginHost(bridge) : null;
+    const host = bridge && isDshBridgeSupported(bridge) ? createDshPluginHost(bridge) : null;
     const capabilities = {
-      readText: true,
-      readBinary: true,
-      writeText: true,
-      stats: true,
-      listDir: true,
+      readText: !!bridge,
+      readBinary: !!bridge,
+      writeText: !!bridge,
+      stats: !!bridge,
+      listDir: !!bridge,
       binaryWrite: false,
       // ctx.fs 无 writeBytes
       mkdir: false,
@@ -877,13 +985,15 @@
       // 完整导出/导入/市场/查看整合包：走 ctx.shell 委派 dspack CLI（真实文件系统 + pnpm + 下载全在 host 侧完成）。
       shell: (argv) => execViaShell(shell, "dspack", argv)
     };
+    const packforge = { host, api, capabilities };
+    registerSettingsSection(ctx, packforge);
     if (ctx && typeof ctx.provide === "function") {
       try {
-        ctx.provide("dsh-packforge", { host, api, capabilities });
+        ctx.provide("dsh-packforge", packforge);
       } catch {
       }
     }
-    return { host, api, capabilities };
+    return packforge;
   }
   function firstDefined(...vals) {
     return vals.find((v) => v !== void 0 && v !== null);

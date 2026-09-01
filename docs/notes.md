@@ -106,3 +106,8 @@
 - 关键技术点：client 插件 `dsh.client.inject` 要加 `ui-settings/locale/ui-slots`（列 peerDeps）；esbuild 把 `react`+`@deepseek-ai/*` 标 external。
 - 待确证：host 插件的「安装进 DSH」途径（`dsh-host-plugin-inventory`）；真机联调（沙箱起不了 DSH Web GUI）。
 - 调查过程/源码目录地图/坑（`.pnpm` junction、type-only 虚拟包 `dsh-client-ui-slots`、host-vs-client 判断法、升级复用指引）另见 `docs/dsh-源码调查记录.md`。
+- **已实现（本轮）**：
+  - 新建 `packages/host-plugin/`（需求 1）：4 个手写 ToolDefinition（`dspack_list/export/view/install`，零 DSH 依赖，execute 走 NodeHost+core）+ `ctx.systemPrompt.section` 引导（order 150）。5 测试。
+  - 改造 `packages/plugin/`（需求 2）：`src/settings.js` 注册 `settings.section`（id=`dspack`、order=20、双语 label）+ `DspackSection` React 组件（按钮委派 `ctx.shell` 走 CLI）；`dsh.client.inject` 增 `ui-settings/locale/ui-slots`、peerDeps、react devDep；bundle `--external:react --external:@deepseek-ai/*`。10 测试（含 react 需 createRequire 模拟 DSH 模块系统的坑）。
+  - 全量 75 测试绿（core 46 + gui 11 + plugin 10 + host-dsh-plugin 3 + host-plugin 5）。
+- **待办**：host 插件「安装进 DSH」途径（`dsh-host-plugin-inventory`）确证；真机联调（沙箱起不了 DSH Web GUI）。
