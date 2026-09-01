@@ -126,6 +126,8 @@ function exportOpts() {
     displayName: $('export-display').value.trim() || undefined,
     description: $('export-desc').value.trim() || undefined,
     author: $('export-author').value.trim() || undefined,
+    icon: $('export-icon').value.trim() || undefined,
+    profileName: $('export-profilename').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
     include: includedArray(),
   };
@@ -332,6 +334,8 @@ function init() {
   $('export-display').addEventListener('change', updatePreview);
   $('export-desc').addEventListener('change', updatePreview);
   $('export-author').addEventListener('change', updatePreview);
+  $('export-icon').addEventListener('change', updatePreview);
+  $('export-profilename').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
   $('export-select-all').addEventListener('change', onSelectAll);
   $('export-files').addEventListener('change', onPickerChange);
