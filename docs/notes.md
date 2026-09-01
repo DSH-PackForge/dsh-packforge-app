@@ -105,3 +105,4 @@
 - 结论：需 **新建 `@dsh-packforge/host-plugin`（host 工具）** + **改造现有 `plugin`（client settings section）**，共享 core。
 - 关键技术点：client 插件 `dsh.client.inject` 要加 `ui-settings/locale/ui-slots`（列 peerDeps）；esbuild 把 `react`+`@deepseek-ai/*` 标 external。
 - 待确证：host 插件的「安装进 DSH」途径（`dsh-host-plugin-inventory`）；真机联调（沙箱起不了 DSH Web GUI）。
+- 调查过程/源码目录地图/坑（`.pnpm` junction、type-only 虚拟包 `dsh-client-ui-slots`、host-vs-client 判断法、升级复用指引）另见 `docs/dsh-源码调查记录.md`。
