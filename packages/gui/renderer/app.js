@@ -1,5 +1,5 @@
 // 渲染进程逻辑（浏览器 ESM，仅依赖纯展示模块 format.js + Electron 桥 window.packforge）。
-import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
 
 const bridge = window.packforge ?? null;
 const $ = (id) => document.getElementById(id);
@@ -88,7 +88,7 @@ async function initExport() {
   vsel.innerHTML = '<option value="">自动（最新已装）</option>'
     + versions.map((v) => `<option value="${escape(v)}">${escape(v)}</option>`).join('');
 
-  updatePreview();
+  onModeChange();
 }
 
 function currentProfile() {
@@ -101,6 +101,13 @@ function exportOpts() {
     displayName: $('export-display').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
   };
+}
+
+function onModeChange() {
+  const repo = $('export-mode').value === 'repo';
+  $('export-content-field').hidden = !repo;
+  $('export-go').textContent = repo ? '导出仓库' : '打包导出';
+  updatePreview();
 }
 
 async function updatePreview() {
@@ -125,18 +132,33 @@ async function doExport() {
   const btn = $('export-go');
   const busy = $('export-busy');
   const result = $('export-result');
+  const repo = $('export-mode').value === 'repo';
+  const out = $('export-out').value.trim() || undefined;
   btn.disabled = true;
   busy.hidden = false;
+  busy.textContent = repo ? '正在导出仓库…' : '正在打包…';
   result.hidden = true;
   try {
-    const r = await bridge.exportPack({
-      profile: { name: p.name, dir: p.dir },
-      ...exportOpts(),
-      out: $('export-out').value.trim() || undefined,
-    });
-    result.innerHTML = exportResultHTML(r);
-    result.className = 'result ok';
-    setStatus(`导出完成：${r.output}`, 'ok');
+    if (repo) {
+      const r = await bridge.exportRepo({
+        profile: { name: p.name, dir: p.dir },
+        ...exportOpts(),
+        content: $('export-content').value,
+        out,
+      });
+      result.innerHTML = exportRepoResultHTML(r);
+      result.className = 'result ok';
+      setStatus(`仓库已导出：${r.dir}`, 'ok');
+    } else {
+      const r = await bridge.exportPack({
+        profile: { name: p.name, dir: p.dir },
+        ...exportOpts(),
+        out,
+      });
+      result.innerHTML = exportResultHTML(r);
+      result.className = 'result ok';
+      setStatus(`导出完成：${r.output}`, 'ok');
+    }
   } catch (e) {
     result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
     result.className = 'result err';
@@ -188,6 +210,8 @@ function init() {
   $('export-profile').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
+  $('export-mode').addEventListener('change', onModeChange);
+  $('export-content').addEventListener('change', updatePreview);
   $('export-refresh').addEventListener('click', initExport);
   $('export-browse').addEventListener('click', async () => {
     const d = await bridge.selectDir();

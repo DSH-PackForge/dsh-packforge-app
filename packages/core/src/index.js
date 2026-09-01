@@ -38,6 +38,7 @@ export {
   DSPK_CONTAINER_VERSION,
 } from './dspack.js';
 export { packProfile, dspackEntryPath } from './pack.js';
+export { exportRepo, renderReadme, renderDspackIgnore, REPO_CONTENT_LEVELS, REPO_CONTENT_LABEL } from './repo.js';
 export { inspectProfile, inspectPack } from './inspect.js';
 export { installPack, verifyIntegrity, reconcileProfile, resolvePackSource } from './install.js';
 export { readMarketIndex, normalizeMarketPack } from './market.js';

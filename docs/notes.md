@@ -82,3 +82,15 @@
 - **DSH 插件 bundle**：确证 `dsh.client` 格式（真实样例 `dsh-client-ui-commands`）：`dsh.client{platform:"web",inject:[...]}` + `exports["./client"]`→浏览器 bundle。
   plugin 加 `src/client.js`（`__ModuleLoader__.load({id:'@dsh-packforge/plugin',factory})`）+ `bundle` 脚本（esbuild；其 postinstall 被拦→直调 `@esbuild/win32-x64/esbuild.exe` 已出 `lib/client.js` 31.5KB）。
   静态检查无 `node:` 内建；运行时回归（mock __ModuleLoader__ 断言 {id,factory}→{name,apply}）。plugin 测试 6/6。
+
+## 8. 导出形态：单文件 ⇄ 源仓库（R7）
+
+- GUI 导出页重做：左表单 + 右实时预览（`inspectProfile` 干跑，不含写盘）；修两处隐藏 bug ——
+  `export-out` id 重复（结果框被 input 吞掉）、`listProfiles()` 返回 `{profiles,roots}` 却被当数组 `.map()`（下拉一直空/抛异常）。
+- 新增「导出形态」：`.dspack 单文件`（既有 `packProfile`）⇄ `仓库 源形态`（新 `core/exportRepo`）。
+- `core/src/repo.js`：`exportRepo(host, profile, {content, out, ...})` 三档 content ——
+  `manifest`（仅清单）/ `readme`（+README.md）/ `full`（机器文件进根 + `overrides/` + `.dspackignore` + `release/` 空目录）；
+  另 `renderReadme`（manifest→markdown）/ `renderDspackIgnore`（gitignore 风格，与 security.js 对齐 + `.git/`、`release/`、`.dspackignore`、`README.md` 不入包）。
+- 桥：`main.mjs` 增 `profiles:exportRepo`；`preload.cjs` 增 `exportRepo`；`format.js` 增 `exportRepoResultHTML` + `REPO_CONTENT_LABEL`。
+- 测试：core 42 / gui 9 / host-dsh-plugin 3 / plugin 6 = **60 全绿**。
+- 待办（未做）：仓库→`.dspack` 的反向重打包（repack 读取 `.dspackignore` 的实际生效逻辑）；CLI 加 `export`/`pack --repo` 形态。

@@ -159,6 +159,28 @@ export function exportResultHTML(r) {
   </table>`;
 }
 
+/** 仓库内容档 → 中文标签（与 core/repo.js 对齐，展示层独立映射）。 */
+export const REPO_CONTENT_LABEL = {
+  manifest: '仅清单（manifest.json）',
+  readme: '清单 + README',
+  full: '全套文件（overrides/ + release/）',
+};
+
+/** 导出仓库成功结果 → HTML（外框 ok/err 由 app.js 决定）。 */
+export function exportRepoResultHTML(r) {
+  const label = REPO_CONTENT_LABEL[r.content] || r.content;
+  const files = (r.written ?? []).map((w) => `<li class="mono">${escapeHtml(w)}</li>`).join('');
+  return `
+  <div class="res-title">✓ 仓库已导出</div>
+  <div class="mono">${escapeHtml(r.dir)}</div>
+  <table class="kv">
+    <tr><td>内容</td><td>${escapeHtml(label)}</td></tr>
+    <tr><td>整合包</td><td>${escapeHtml(r.manifest?.name ?? '')} v${escapeHtml(String(r.manifest?.version ?? ''))}</td></tr>
+    <tr><td>写入</td><td>${(r.written ?? []).length} 项</td></tr>
+  </table>
+  ${files ? `<ul class="tree repo-written">${files}</ul>` : ''}`;
+}
+
 function entryListHTML(recs) {
   return `<ul class="tree">${recs.map((e) => `<li>${escapeHtml(e.path)} <span class="muted">(${formatBytes(e.size)})</span></li>`).join('')}</ul>`;
 }

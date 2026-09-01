@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('packforge', {
   inspectProfile: (opts) => ipcRenderer.invoke('profiles:inspect', opts),
   listDshVersions: () => ipcRenderer.invoke('dsh:versions'),
   exportPack: (opts) => ipcRenderer.invoke('profiles:export', opts),
+  exportRepo: (opts) => ipcRenderer.invoke('profiles:exportRepo', opts),
   installPack: (opts) => ipcRenderer.invoke('pack:install', opts),
   marketList: () => ipcRenderer.invoke('market:list'),
 });

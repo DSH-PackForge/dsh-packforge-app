@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
 
 const FIXTURE = {
   sha256: 'a'.repeat(64),
@@ -117,4 +117,18 @@ test('exportResultHTML：渲染成功结果', () => {
   assert.match(html, /web-1\.0\.0\.dspack/);
   assert.match(html, /300 B/);
   assert.match(html, /a{16}/);
+});
+
+test('exportRepoResultHTML：渲染仓库结果（内容档/写入清单）', () => {
+  const html = exportRepoResultHTML({
+    dir: 'C:\\out\\web-1.0.0',
+    content: 'full',
+    manifest: { name: 'web', version: '1.0.0' },
+    written: ['manifest.json', 'README.md', 'release/'],
+  });
+  assert.match(html, /仓库已导出/);
+  assert.match(html, /全套文件/);
+  assert.match(html, /web v1\.0\.0/);
+  assert.match(html, /README\.md/);
+  assert.match(html, /3 项/);
 });

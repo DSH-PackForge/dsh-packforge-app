@@ -27,6 +27,7 @@ function registerIpc() {
   ipcMain.handle('pack:view', (_e, p) => core.inspectPack(host, p));
   ipcMain.handle('profiles:list', () => core.discoverProfiles(host));
   ipcMain.handle('profiles:export', (_e, opts) => core.packProfile(host, opts.profile, opts));
+  ipcMain.handle('profiles:exportRepo', (_e, opts) => core.exportRepo(host, opts.profile, opts));
   ipcMain.handle('profiles:inspect', (_e, opts) => core.inspectProfile(host, opts.profile, opts));
   ipcMain.handle('dsh:versions', () => core.listInstalledDshVersions(host));
   ipcMain.handle('pack:install', (_e, opts) => core.installPack(host, opts));
