@@ -27,7 +27,7 @@ async function refreshMarket() {
   out.innerHTML = '<p class="muted">加载中…</p>';
   const r = await bridge.marketList();
   if (!r.packs.length) {
-    out.innerHTML = `<p class="muted">${r.error ? '索引读取失败：' + r.error : '无市场条目（可设置 DSHPACK_MARKET_INDEX 指向 index.json）'}</p>`;
+    out.innerHTML = `<p class="muted">${r.error ? '索引读取失败：' + r.error : '无市场条目（默认拉取官方站点，可用 DSHPACK_MARKET_INDEX 覆盖）'}</p>`;
     return;
   }
   out.innerHTML = r.packs.map((p) => marketCardHTML(p)).join('');

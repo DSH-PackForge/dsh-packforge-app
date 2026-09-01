@@ -10,6 +10,7 @@ import {
   installPack,
   resolvePackSource,
   readMarketIndex,
+  DEFAULT_MARKET_INDEX,
 } from '@dsh-packforge/core';
 
 const VERSION = '0.1.0';
@@ -48,7 +49,7 @@ view 选项:
   --json                  以 JSON 输出完整查看结果
 
 market 选项:
-  --json                  以 JSON 输出市场条目（索引路径：位置参数或 $env:DSHPACK_MARKET_INDEX）
+  --json                  以 JSON 输出市场条目（默认官方远端，可用位置参数或 $env:DSHPACK_MARKET_INDEX 覆盖）
 
 install 选项:
   --name <slug>           安装后的 Profile 目录名（默认取 manifest）
@@ -264,8 +265,7 @@ async function runView(host, args) {
 
 async function runMarket(host, args) {
   const { values, positionals } = parse({ json: { type: 'boolean' } }, args);
-  const indexPath = positionals[0] || host.env('DSHPACK_MARKET_INDEX');
-  if (!indexPath) throw new Error('未指定市场索引：`dspack market <index.json>` 或设置 DSHPACK_MARKET_INDEX');
+  const indexPath = positionals[0] || host.env('DSHPACK_MARKET_INDEX') || DEFAULT_MARKET_INDEX;
 
   const { packs } = await readMarketIndex(host, indexPath);
   if (values.json) {

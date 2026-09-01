@@ -5,6 +5,9 @@
  * - 从下载地址/版本号自动判别 `.dspack`(v4) 与 `.tgz`(v3) 旧格式。
  */
 
+/** 默认市场索引：官方 GitHub Pages 站点（CI 每日刷新扫描 dsh-pack 标签仓库）。 */
+export const DEFAULT_MARKET_INDEX = 'https://dsh-packforge.github.io/dsh-pack-market/index.json';
+
 /** 读取本地路径或 http(s) URL 的 index.json，返回归一化后的市场条目列表。 */
 export async function readMarketIndex(host, indexPath) {
   const index = parseJson(await fetchIndexText(host, indexPath));

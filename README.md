@@ -47,7 +47,7 @@ pnpm test
 
 ```bash
 pnpm install
-pnpm --filter gui start   # 市场索引：DSHPACK_MARKET_INDEX=/path/to/index.json
+pnpm --filter gui start   # 市场默认从官方 GitHub Pages 拉取；可用 DSHPACK_MARKET_INDEX 覆盖
 ```
 
 ## 分发（npm / 桌面安装包 / 插件 bundle）

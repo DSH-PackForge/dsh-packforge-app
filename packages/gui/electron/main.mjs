@@ -9,9 +9,8 @@ const { NodeHost } = await import('@dsh-packforge/host-node');
 const core = await import('@dsh-packforge/core');
 const host = new NodeHost();
 
-/** 市场索引源：环境变量优先，默认从官方 GitHub Pages 站点拉取。 */
-const DEFAULT_MARKET_INDEX = 'https://dsh-packforge.github.io/dsh-pack-market/index.json';
-const MARKET_INDEX = process.env.DSHPACK_MARKET_INDEX || DEFAULT_MARKET_INDEX;
+/** 市场索引源：环境变量优先，默认从官方 GitHub Pages 站点（core.DEFAULT_MARKET_INDEX）拉取。 */
+const MARKET_INDEX = process.env.DSHPACK_MARKET_INDEX || core.DEFAULT_MARKET_INDEX;
 
 function registerIpc() {
   ipcMain.handle('dialog:selectFile', async (_e, filters) => {
