@@ -185,18 +185,19 @@ button.ghost:hover { background: var(--panel-2); color: var(--fg); }
 .theme-toggle:hover { filter: none; background: var(--panel-2); }
 
 /* ---------- 输入 ---------- */
-input, select {
+input, select, textarea {
   background: var(--bg-2); color: var(--fg);
   border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 8px 11px; font: inherit; font-size: 13.5px;
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
-input::placeholder { color: var(--faint); }
-input:focus, select:focus {
+input::placeholder, textarea::placeholder { color: var(--faint); }
+input:focus, select:focus, textarea:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 select { padding-right: 8px; }
+textarea { resize: vertical; min-height: 58px; line-height: 1.5; }
 
 /* ---------- 通用工具类 ---------- */
 .muted { color: var(--muted); }

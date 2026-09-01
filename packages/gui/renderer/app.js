@@ -122,6 +122,7 @@ function currentProfile() {
 function exportOpts() {
   return {
     displayName: $('export-display').value.trim() || undefined,
+    description: $('export-desc').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
   };
 }
@@ -233,6 +234,7 @@ function init() {
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
   $('export-profile').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
+  $('export-desc').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
   $('export-mode').addEventListener('change', onModeChange);
   $('export-content').addEventListener('change', updatePreview);
