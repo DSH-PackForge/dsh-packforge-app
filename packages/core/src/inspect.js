@@ -2,12 +2,13 @@ import { scanProfile } from './scan.js';
 import { buildManifest } from './manifest.js';
 import { validateManifest } from './manifest.js';
 import { parseDspack, decodeText } from './dspack.js';
+import { summarizeSpecial } from './special.js';
 
-/** 干跑检查：返回扫描结果 + manifest v4 预览，不写任何文件。 */
+/** 干跑检查：返回扫描结果 + manifest v4 预览 + 特殊目录摘要，不写任何文件。 */
 export async function inspectProfile(host, profile, opts = {}) {
   const scan = await scanProfile(host, profile.dir);
   const manifest = await buildManifest(host, profile, opts, scan);
-  return { profile, ...scan, manifest };
+  return { profile, ...scan, manifest, special: summarizeSpecial(scan.files) };
 }
 
 /**

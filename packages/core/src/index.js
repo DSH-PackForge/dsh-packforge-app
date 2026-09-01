@@ -2,6 +2,7 @@
 export { Host } from './host.js';
 export { isExcluded } from './security.js';
 export { scanProfile } from './scan.js';
+export { summarizeSpecial } from './special.js';
 export {
   buildManifest,
   validateManifest,

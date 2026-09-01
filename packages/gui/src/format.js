@@ -144,8 +144,22 @@ export function exportPreviewHTML(ins) {
     <tr><td>将打包</td><td>${files.length} 个文件 · ${formatBytes(total)}</td></tr>
     <tr><td>排除</td><td>${(ins.excluded ?? []).length} 个文件/目录</td></tr>
   </table>
+  ${specialHTML(ins.special)}
   <div class="muted mono pre-file">→ ${escapeHtml(name)}-${escapeHtml(String(m.version))}.dspack</div>
   `.trim();
+}
+
+/** 特殊目录摘要（skill / agent-preset / icon）；无内容时返回空串。 */
+export function specialHTML(sp) {
+  const s = sp?.skills ?? [];
+  const a = sp?.agentPresets ?? [];
+  const ic = sp?.icons ?? [];
+  if (!s.length && !a.length && !ic.length) return '';
+  const rows = [];
+  if (s.length) rows.push(`<tr><td>Skill</td><td>${s.length} 个 · ${s.map((x) => escapeHtml(x.name)).join(', ')}</td></tr>`);
+  if (a.length) rows.push(`<tr><td>Agent 预设</td><td>${a.length} 个 · ${a.map((x) => escapeHtml(x.id)).join(', ')}</td></tr>`);
+  if (ic.length) rows.push(`<tr><td>图标</td><td class="mono">${ic.map(escapeHtml).join(', ')}</td></tr>`);
+  return `<h4 class="special-head">特殊目录</h4><table class="kv">${rows.join('')}</table>`;
 }
 
 /** 导出成功结果 → HTML（外框 ok/err 由 app.js 决定）。 */

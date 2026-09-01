@@ -191,15 +191,20 @@ async function runInspect(host, args) {
   const profile = await resolveProfileInput(host, positionals[0]);
   if (!profile) throw new Error(`找不到 Profile「${positionals[0] ?? ''}」。${profileHint(await discoverProfiles(host))}`);
 
-  const { files, excluded, manifest } = await inspectProfile(host, profile);
+  const { files, excluded, manifest, special } = await inspectProfile(host, profile);
 
   if (values.json) {
-    log(JSON.stringify({ profile: profile.dir, manifest, files, excluded }, null, 2));
+    log(JSON.stringify({ profile: profile.dir, manifest, files, excluded, special }, null, 2));
     return;
   }
 
   log(`Profile : ${profile.name} (${profile.dir})`);
   log(`包含 ${files.length} 个文件，排除 ${excluded.length} 项\n`);
+  const sp = special ?? {};
+  if (sp.skills?.length) log(`Skill      : ${sp.skills.length} 个（${sp.skills.map((s) => s.name).join(', ')}）`);
+  if (sp.agentPresets?.length) log(`Agent 预设 : ${sp.agentPresets.length} 个（${sp.agentPresets.map((a) => a.id).join(', ')}）`);
+  if (sp.icons?.length) log(`图标       : ${sp.icons.join(', ')}`);
+  if (sp.skills?.length || sp.agentPresets?.length || sp.icons?.length) log('');
   if (files.length) {
     log('将打包的文件:');
     for (const f of files) log(`  ${f.rel}  (${formatBytes(f.size)})`);

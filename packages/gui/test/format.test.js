@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, formatBytes, pickLocale, exportPreviewHTML, exportResultHTML, exportRepoResultHTML, specialHTML } from '../src/format.js';
 
 const FIXTURE = {
   sha256: 'a'.repeat(64),
@@ -108,6 +108,25 @@ test('exportPreviewHTML：渲染打包预览（名称/版本/层栈/依赖/文�
   assert.match(html, /1 个文件\/目录/);
   assert.match(html, /web-1\.0\.0\.dspack/);
   assert.match(html, /300 B/);
+});
+
+test('specialHTML：渲染特殊目录摘要（skill/agent-preset/icon）', () => {
+  const html = specialHTML({
+    skills: [{ name: 'fmt' }, { name: 'audit' }],
+    agentPresets: [{ id: 'code' }],
+    icons: ['icons/logo.png'],
+  });
+  assert.match(html, /Skill/);
+  assert.match(html, /2 个 · fmt, audit/);
+  assert.match(html, /Agent 预设/);
+  assert.match(html, /1 个 · code/);
+  assert.match(html, /图标/);
+  assert.match(html, /icons\/logo\.png/);
+});
+
+test('specialHTML：无内容返回空串', () => {
+  assert.equal(specialHTML({ skills: [], agentPresets: [], icons: [] }), '');
+  assert.equal(specialHTML(undefined), '');
 });
 
 test('exportResultHTML：渲染成功结果', () => {

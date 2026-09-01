@@ -274,6 +274,7 @@ h3:first-child { margin-top: 0; }
 .export-layout { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
 @media (max-width: 780px) { .export-layout { grid-template-columns: 1fr; } }
 .preview-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--fg-2); }
+.special-head { margin: 12px 0 0; font-size: 12.5px; font-weight: 600; color: var(--accent); }
 .pre-file { margin-top: 10px; color: var(--muted); }
 
 /* ---------- 结果条 ---------- */
