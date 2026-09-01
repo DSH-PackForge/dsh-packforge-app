@@ -67,3 +67,23 @@ test('market：空/坏索引鲁棒', async () => {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }
 });
+
+test('market：http(s) URL 拉取索引（host.download 到临时文件后读取并清理）', async () => {
+  const body = JSON.stringify({
+    schemaVersion: 1,
+    modpacks: [{ name: 'web', version: '1.0.0', manifestVersion: 4, downloadUrl: 'https://x/web.dspack' }],
+  });
+  const files = new Map();
+  const host = {
+    joinPath: (...p) => p.join('/'),
+    resolvePath: (p) => p,
+    mkdtemp: async () => '/tmp/pfx-mkt',
+    download: async (_url, dest) => { files.set(dest, body); },
+    readTextFile: async (abs) => files.get(abs) ?? null,
+    rm: async () => { files.clear(); },
+  };
+  const r = await readMarketIndex(host, 'https://dsh-packforge.github.io/dsh-pack-market/index.json');
+  assert.equal(r.packs.length, 1);
+  assert.equal(r.packs[0].name, 'web');
+  assert.equal(r.packs[0].format, 'dspack');
+});

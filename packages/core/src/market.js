@@ -5,16 +5,30 @@
  * - 从下载地址/版本号自动判别 `.dspack`(v4) 与 `.tgz`(v3) 旧格式。
  */
 
-/** 读取本地/URL 拉取的 index.json，返回归一化后的市场条目列表。 */
+/** 读取本地路径或 http(s) URL 的 index.json，返回归一化后的市场条目列表。 */
 export async function readMarketIndex(host, indexPath) {
-  const text = await host.readTextFile(host.resolvePath(indexPath));
-  const index = parseJson(text);
+  const index = parseJson(await fetchIndexText(host, indexPath));
   const raw = Array.isArray(index?.modpacks) ? index.modpacks : Array.isArray(index?.packs) ? index.packs : [];
   return {
     schemaVersion: index?.schemaVersion ?? 1,
     generatedAt: index?.generatedAt ?? null,
     packs: raw.map((e) => normalizeMarketPack(e)).filter(Boolean),
   };
+}
+
+/** 取索引文本：http(s) URL 走 host.download 拉到临时文件再读（读完清理）；否则当本地路径读。 */
+async function fetchIndexText(host, indexPath) {
+  if (!/^https?:\/\//i.test(indexPath)) {
+    return (await host.readTextFile(host.resolvePath(indexPath))) ?? '';
+  }
+  const tmp = await host.mkdtemp('pfx-mkt-');
+  try {
+    const dest = host.joinPath(tmp, 'index.json');
+    await host.download(indexPath, dest);
+    return (await host.readTextFile(dest)) ?? '';
+  } finally {
+    await host.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /** 归一化一条市场条目；不可识别返回 null。 */
