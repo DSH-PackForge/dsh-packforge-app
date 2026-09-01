@@ -8,14 +8,17 @@
 /** 默认市场索引：官方 GitHub Pages 站点（CI 每日刷新扫描 dsh-pack 标签仓库）。 */
 export const DEFAULT_MARKET_INDEX = 'https://dsh-packforge.github.io/dsh-pack-market/index.json';
 
-/** 读取本地路径或 http(s) URL 的 index.json，返回归一化后的市场条目列表。 */
+/** 读取本地路径或 http(s) URL 的 index.json，返回归一化后的市场条目列表。
+ *  解析异常/缺字段时不抛错，而是带 `error` 说明（packs 为空），便于调用方提示真实原因。 */
 export async function readMarketIndex(host, indexPath) {
-  const index = parseJson(await fetchIndexText(host, indexPath));
+  const parsed = parseIndex(await fetchIndexText(host, indexPath));
+  const index = parsed.index;
   const raw = Array.isArray(index?.modpacks) ? index.modpacks : Array.isArray(index?.packs) ? index.packs : [];
   return {
     schemaVersion: index?.schemaVersion ?? 1,
     generatedAt: index?.generatedAt ?? null,
     packs: raw.map((e) => normalizeMarketPack(e)).filter(Boolean),
+    error: parsed.error,
   };
 }
 
@@ -31,6 +34,21 @@ async function fetchIndexText(host, indexPath) {
     return (await host.readTextFile(dest)) ?? '';
   } finally {
     await host.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** 解析索引 JSON：空内容 / 非 JSON / 缺数组字段时返回带 error 的对象。 */
+function parseIndex(text) {
+  const s = String(text ?? '').trim();
+  if (!s) return { index: {}, error: '市场索引内容为空' };
+  try {
+    const index = JSON.parse(s);
+    if (!Array.isArray(index?.modpacks) && !Array.isArray(index?.packs)) {
+      return { index, error: '市场索引缺少 modpacks[] 或 packs[] 字段' };
+    }
+    return { index, error: null };
+  } catch {
+    return { index: {}, error: `市场索引不是有效 JSON（开头：${s.slice(0, 80)}）` };
   }
 }
 
@@ -91,12 +109,4 @@ function pickLocale(map, locale, fallback) {
     if (first) return first;
   }
   return fallback ?? '';
-}
-
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
-  }
 }

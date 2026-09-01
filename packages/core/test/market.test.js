@@ -63,6 +63,7 @@ test('market：空/坏索引鲁棒', async () => {
     const r = await readMarketIndex(host, p);
     assert.deepEqual(r.packs, []);
     assert.equal(r.schemaVersion, 1);
+    assert.ok(r.error.includes('不是有效 JSON'));
   } finally {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }
