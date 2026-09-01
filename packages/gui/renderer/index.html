@@ -131,6 +131,15 @@
                 </div>
               </div>
 
+              <div class="field" id="export-files-field" hidden>
+                <label>包含内容 <span class="muted">（勾选要打进包的文件/目录）</span></label>
+                <div class="picker-bar">
+                  <label class="check"><input type="checkbox" id="export-select-all" checked /> 全选</label>
+                  <span id="export-files-count" class="muted"></span>
+                </div>
+                <div id="export-files" class="file-picker"></div>
+              </div>
+
               <div class="toolbar">
                 <button id="export-go" class="primary">打包导出</button>
                 <span id="export-busy" class="muted" hidden>正在打包…</span>

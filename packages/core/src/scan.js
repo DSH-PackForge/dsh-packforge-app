@@ -18,6 +18,17 @@ export async function scanProfile(host, profileDir) {
   return { files, excluded };
 }
 
+/**
+ * 按 include 白名单（rel 路径数组或 Set）过滤扫描文件。
+ * undefined/null = 全量；[] / 空 Set = 空（显式一个都不选）；否则取白名单命中项。
+ * 机器文件与 overrides 候选都走同一白名单（manifest.json 由打包侧单独写入，不在 files 里）。
+ */
+export function selectFiles(files, include) {
+  if (include === undefined || include === null) return files;
+  const set = include instanceof Set ? include : new Set(include);
+  return files.filter((f) => set.has(f.rel));
+}
+
 async function walk(host, dir, rel, files, excluded) {
   let entries;
   try {

@@ -1,7 +1,7 @@
 // DSH-PackForge core 公共 API（供 CLI / GUI / 插件以编程方式调用）。
 export { Host } from './host.js';
 export { isExcluded } from './security.js';
-export { scanProfile } from './scan.js';
+export { scanProfile, selectFiles } from './scan.js';
 export { summarizeSpecial } from './special.js';
 export {
   buildManifest,

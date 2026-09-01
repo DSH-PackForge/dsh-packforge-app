@@ -1,4 +1,4 @@
-import { scanProfile } from './scan.js';
+import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest } from './manifest.js';
 import { buildDspack, encodeText } from './dspack.js';
 
@@ -25,11 +25,16 @@ export async function packProfile(host, profile, opts = {}) {
   if (scan.files.length === 0) {
     throw new Error(`Profile「${profile.name}」没有可打包的文件（全部被过滤或目录为空）`);
   }
+  // opts.include（rel 白名单）指定要包含的文件；未给则全量。
+  const files = selectFiles(scan.files, opts.include);
+  if (files.length === 0) {
+    throw new Error(`没有选中的文件（请至少勾选一个文件/目录）`);
+  }
 
   const manifest = await buildManifest(host, profile, opts, scan);
 
   const entries = {};
-  for (const f of scan.files) {
+  for (const f of files) {
     const data = await host.readFile(f.abs);
     if (!data) continue; // 读不到：跳过
     entries[dspackEntryPath(f.rel)] = data;

@@ -4,7 +4,7 @@
 //   - readme  ：清单 + README.md
 //   - full    ：全套（机器文件 + overrides/ + .dspackignore + release/）
 // 布局遵循 pack-structure v2：机器文件进根目录，其余用户文件进 overrides/。
-import { scanProfile } from './scan.js';
+import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest, resolveLocale } from './manifest.js';
 import { dspackEntryPath } from './pack.js';
 
@@ -28,6 +28,7 @@ export const REPO_CONTENT_LABEL = {
 export async function exportRepo(host, profile, opts = {}) {
   const content = REPO_CONTENT_LEVELS.includes(opts.content) ? opts.content : 'full';
   const scan = await scanProfile(host, profile.dir);
+  const files = selectFiles(scan.files, opts.include);
   const manifest = await buildManifest(host, profile, opts, scan);
 
   const parent = opts.out ? host.resolvePath(opts.out) : host.cwd();
@@ -52,7 +53,7 @@ export async function exportRepo(host, profile, opts = {}) {
   if (content === 'full') {
     ignored = renderDspackIgnore();
     await writeText('.dspackignore', ignored);
-    for (const f of scan.files) {
+    for (const f of files) {
       const data = await host.readFile(f.abs);
       if (!data) continue;
       const dest = dspackEntryPath(f.rel); // 机器文件→根；其余→overrides/

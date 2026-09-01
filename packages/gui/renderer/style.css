@@ -198,6 +198,7 @@ input:focus, select:focus, textarea:focus {
 }
 select { padding-right: 8px; }
 textarea { resize: vertical; min-height: 58px; line-height: 1.5; }
+input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--accent); }
 
 /* ---------- 通用工具类 ---------- */
 .muted { color: var(--muted); }
@@ -275,6 +276,13 @@ h3:first-child { margin-top: 0; }
 @media (max-width: 780px) { .export-layout { grid-template-columns: 1fr; } }
 .preview-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--fg-2); }
 .special-head { margin: 12px 0 0; font-size: 12.5px; font-weight: 600; color: var(--accent); }
+.picker-bar { display: flex; align-items: center; gap: 12px; }
+.file-picker { max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); padding: 6px 10px; }
+.fp-tree { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.fp-tree ul { list-style: none; margin: 0; padding-left: 16px; }
+.fp-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.fp-row span { overflow-wrap: anywhere; }
+.fp-dir { color: var(--fg-2); font-weight: 600; }
 .pre-file { margin-top: 10px; color: var(--muted); }
 
 /* ---------- 结果条 ---------- */

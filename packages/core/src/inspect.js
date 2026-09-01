@@ -1,14 +1,23 @@
-import { scanProfile } from './scan.js';
+import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest } from './manifest.js';
 import { validateManifest } from './manifest.js';
 import { parseDspack, decodeText } from './dspack.js';
 import { summarizeSpecial } from './special.js';
 
-/** 干跑检查：返回扫描结果 + manifest v4 预览 + 特殊目录摘要，不写任何文件。 */
+/** 干跑检查：返回扫描结果 + manifest v4 预览 + 特殊目录摘要，不写任何文件。
+ *  opts.include（rel 白名单）给定则 files/special 只取选中项，allFiles 保留全量。 */
 export async function inspectProfile(host, profile, opts = {}) {
   const scan = await scanProfile(host, profile.dir);
+  const files = selectFiles(scan.files, opts.include);
   const manifest = await buildManifest(host, profile, opts, scan);
-  return { profile, ...scan, manifest, special: summarizeSpecial(scan.files) };
+  return {
+    profile,
+    files,
+    allFiles: scan.files,
+    excluded: scan.excluded,
+    manifest,
+    special: summarizeSpecial(files),
+  };
 }
 
 /**

@@ -124,7 +124,94 @@ function exportOpts() {
     displayName: $('export-display').value.trim() || undefined,
     description: $('export-desc').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
+    include: includedArray(),
   };
+}
+
+/* 文件(夹)选择（勾选要打进包的内容） */
+let exportAllFiles = [];
+let exportIncluded = null; // null = 全选；否则 Set<rel>
+
+function includeSet() {
+  return exportIncluded ?? new Set(exportAllFiles.map((f) => f.rel));
+}
+
+function includedArray() {
+  return exportIncluded == null ? undefined : [...exportIncluded];
+}
+
+function dirLeafFiles(dir) {
+  return exportAllFiles
+    .filter((f) => f.rel === dir || f.rel.startsWith(dir + '/'))
+    .map((f) => f.rel);
+}
+
+function setIncluded(rels, on) {
+  const set = new Set(includeSet());
+  for (const r of rels) { if (on) set.add(r); else set.delete(r); }
+  exportIncluded = set.size === exportAllFiles.length ? null : set;
+}
+
+function buildExportTree(files) {
+  const root = new Map();
+  for (const f of files) {
+    const parts = String(f.rel).split('/');
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const name = parts[i];
+      const isLeaf = i === parts.length - 1;
+      if (!node.has(name)) {
+        node.set(name, { name, path: parts.slice(0, i + 1).join('/'), isDir: !isLeaf, children: isLeaf ? null : new Map() });
+      }
+      if (isLeaf) break;
+      node = node.get(name).children;
+    }
+  }
+  return [...root.values()];
+}
+
+function treeNodesHTML(nodes, set) {
+  return nodes.map((n) => {
+    if (n.isDir) {
+      const kids = [...n.children.values()];
+      return `<li><div class="fp-row"><input type="checkbox" data-dir="${escape(n.path)}"> <span class="fp-dir">${escape(n.name)}/</span></div>${kids.length ? `<ul>${treeNodesHTML(kids, set)}</ul>` : ''}</li>`;
+    }
+    return `<li><div class="fp-row"><input type="checkbox" data-file="${escape(n.path)}" ${set.has(n.path) ? 'checked' : ''}> <span>${escape(n.name)}</span></div></li>`;
+  }).join('');
+}
+
+function renderFilePicker() {
+  const field = $('export-files-field');
+  const box = $('export-files');
+  if (!exportAllFiles.length) {
+    field.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  field.hidden = false;
+  const set = includeSet();
+  box.innerHTML = `<ul class="fp-tree">${treeNodesHTML(buildExportTree(exportAllFiles), set)}</ul>`;
+  box.querySelectorAll('input[data-dir]').forEach((cb) => {
+    const files = dirLeafFiles(cb.dataset.dir);
+    const sel = files.filter((r) => set.has(r)).length;
+    cb.checked = files.length > 0 && sel === files.length;
+    cb.indeterminate = sel > 0 && sel < files.length;
+  });
+  $('export-select-all').checked = exportIncluded == null;
+  $('export-files-count').textContent = `${set.size} / ${exportAllFiles.length} 个文件`;
+}
+
+function onSelectAll(e) {
+  exportIncluded = e.target.checked ? null : new Set();
+  updatePreview();
+}
+
+function onPickerChange(e) {
+  const t = e.target;
+  if (t.dataset.dir) setIncluded(dirLeafFiles(t.dataset.dir), t.checked);
+  else if (t.dataset.file) setIncluded([t.dataset.file], t.checked);
+  else return;
+  updatePreview();
 }
 
 function onModeChange() {
@@ -139,11 +226,15 @@ async function updatePreview() {
   const box = $('export-preview');
   if (!p) {
     box.innerHTML = '<p class="muted">选择 Profile 后显示打包预览</p>';
+    $('export-files-field').hidden = true;
+    $('export-files').innerHTML = '';
     return;
   }
   box.innerHTML = '<p class="muted">扫描中…</p>';
   try {
     const ins = await bridge.inspectProfile({ profile: { name: p.name, dir: p.dir }, ...exportOpts() });
+    exportAllFiles = ins.allFiles ?? ins.files ?? [];
+    renderFilePicker();
     box.innerHTML = exportPreviewHTML(ins);
   } catch (e) {
     box.innerHTML = `<p class="err">预览失败：${escape(e.message)}</p>`;
@@ -236,6 +327,8 @@ function init() {
   $('export-display').addEventListener('change', updatePreview);
   $('export-desc').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
+  $('export-select-all').addEventListener('change', onSelectAll);
+  $('export-files').addEventListener('change', onPickerChange);
   $('export-mode').addEventListener('change', onModeChange);
   $('export-content').addEventListener('change', updatePreview);
   $('export-refresh').addEventListener('click', initExport);

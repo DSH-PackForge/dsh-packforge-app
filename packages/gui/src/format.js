@@ -127,6 +127,7 @@ export function exportPreviewHTML(ins) {
   if (!ins) return '';
   const m = ins.manifest;
   const files = ins.files ?? [];
+  const allFiles = ins.allFiles ?? files;
   const total = files.reduce((a, f) => a + (f.size || 0), 0);
   const bundles = m.bundles ?? [];
   const deps = Object.keys(m.dependencies ?? {});
@@ -141,7 +142,7 @@ export function exportPreviewHTML(ins) {
     <tr><td>DSH 版本</td><td>${m.dshVersion ? escapeHtml(m.dshVersion) : '<span class="muted">最新（未钉定）</span>'}</td></tr>
     <tr><td>层栈</td><td>${bundles.length ? bundles.map(escapeHtml).join(', ') : '<span class="muted">无</span>'}</td></tr>
     <tr><td>依赖</td><td>${deps.length ? deps.map(escapeHtml).join(', ') : '<span class="muted">无</span>'}</td></tr>
-    <tr><td>将打包</td><td>${files.length} 个文件 · ${formatBytes(total)}</td></tr>
+    <tr><td>将打包</td><td>${files.length} 个文件${allFiles.length !== files.length ? `（共 ${allFiles.length} 个，已选 ${files.length}）` : ''} · ${formatBytes(total)}</td></tr>
     <tr><td>排除</td><td>${(ins.excluded ?? []).length} 个文件/目录</td></tr>
   </table>
   ${specialHTML(ins.special)}
