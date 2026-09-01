@@ -26,7 +26,6 @@ test('view：查看 .dspack（容器/校验/条目分类/totalEntries）', async
   });
   const r = await inspectPack(host, bytes);
 
-  assert.equal(r.containerVersion, 2);
   assert.equal(r.valid, true);
   assert.equal(r.manifest.name, 'demo');
   assert.equal(r.size, bytes.byteLength);

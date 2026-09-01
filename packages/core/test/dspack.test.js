@@ -1,23 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  buildDspack,
-  parseDspack,
-  encodeHeader,
-  decodeHeader,
-  encodeText,
-  decodeText,
-  DSPK_MAGIC,
-  DSPK_HEADER_SIZE,
-  DSPK_CONTAINER_VERSION,
-} from '../src/dspack.js';
+import { buildDspack, parseDspack, encodeText, decodeText } from '../src/dspack.js';
 
-test('头部编解码', () => {
-  const h = encodeHeader();
-  assert.equal(h.length, DSPK_HEADER_SIZE);
-  const info = decodeHeader(h);
-  assert.equal(info.magic, DSPK_MAGIC);
-  assert.equal(info.version, DSPK_CONTAINER_VERSION);
+test('打包为标准 ZIP：PK 签名、无 DSPK 魔数头', () => {
+  const bytes = buildDspack({ 'manifest.json': encodeText('{"manifestVersion":4}') });
+  // ZIP 本地文件头签名 PK\x03\x04
+  assert.equal(bytes[0], 0x50); // 'P'
+  assert.equal(bytes[1], 0x4b); // 'K'
+  assert.equal(bytes[2], 0x03);
+  assert.equal(bytes[3], 0x04);
+  assert.notEqual(String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]), 'DSPK');
 });
 
 test('打包/解包 roundtrip', () => {
@@ -28,28 +20,17 @@ test('打包/解包 roundtrip', () => {
     'overrides/skills/readme.md': encodeText('# hi\n'),
   };
   const bytes = buildDspack(entries);
-  // 头 4 字节是 DSPK
-  assert.equal(String.fromCharCode(...bytes.subarray(0, 4)), 'DSPK');
-
-  const { entries: got, version } = parseDspack(bytes);
-  assert.equal(version, DSPK_CONTAINER_VERSION);
+  const { entries: got } = parseDspack(bytes);
   assert.deepEqual(Object.keys(got).sort(), Object.keys(entries).sort());
   assert.equal(decodeText(got['overrides/cordis.patch.yml']), '[]\n');
   assert.equal(decodeText(got['manifest.json']), '{"manifestVersion":4}');
 });
 
-test('篡改魔术字节 → 拒载', () => {
-  const bytes = buildDspack({ a: encodeText('x') });
-  bytes[0] = 0x58; // 'X'
-  assert.throws(() => parseDspack(bytes), /缺少 DSPK 头/);
+test('非 ZIP / 空内容 → 报错', () => {
+  assert.throws(() => parseDspack(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])), /ZIP/);
+  assert.throws(() => parseDspack(new Uint8Array()), /空内容/);
 });
 
-test('未知容器版本 → 拒载', () => {
-  const bytes = buildDspack({ a: encodeText('x') });
-  new DataView(bytes.buffer).setUint32(4, 999, true);
-  assert.throws(() => parseDspack(bytes), /容器版本/);
-});
-
-test('长度不足 → 报错', () => {
-  assert.throws(() => parseDspack(new Uint8Array([1, 2, 3])), /长度不足/);
+test('encodeText/decodeText 往返', () => {
+  assert.equal(decodeText(encodeText('你好')), '你好');
 });

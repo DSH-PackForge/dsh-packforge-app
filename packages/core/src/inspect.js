@@ -17,12 +17,12 @@ export async function inspectProfile(host, profile, opts = {}) {
  *
  * @param {Host} host
  * @param {string|Uint8Array} source 本地 .dspack 路径或已在内存中的字节
- * @returns {Promise<{sha256,size,containerVersion,valid,validation,manifest,machine,overrides,other,totalEntries}>}
+ * @returns {Promise<{sha256,size,valid,validation,manifest,machine,overrides,other,totalEntries}>}
  */
 export async function inspectPack(host, source) {
   const bytes = source instanceof Uint8Array ? source : await host.readFile(host.resolvePath(source));
   if (!bytes) throw new Error('无法读取整合包文件');
-  const { entries, version } = parseDspack(bytes);
+  const { entries } = parseDspack(bytes);
 
   let manifest = null;
   let validation;
@@ -52,7 +52,6 @@ export async function inspectPack(host, source) {
   return {
     sha256: await host.sha256(bytes),
     size: bytes.byteLength,
-    containerVersion: version,
     valid: validation.length === 0,
     validation,
     manifest,

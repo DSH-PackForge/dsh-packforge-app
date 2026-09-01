@@ -63,7 +63,7 @@ export function packViewHTML(r) {
   <div class="pv-head">
     <span class="badge ${r.valid ? 'ok' : 'bad'}">${r.valid ? '校验合法' : '校验失败'}</span>
     <span class="pill">${m ? `manifest v${m.manifestVersion}` : '无 manifest'}</span>
-    <span class="pill">.dspack v${r.containerVersion}</span>
+    <span class="pill">标准 ZIP</span>
     <span class="muted">${formatBytes(r.size)} · sha256 ${shortSha(r.sha256)}</span>
   </div>
   ${r.valid ? '' : `<ul class="errs">${r.validation.map((e) => `<li>✗ ${escapeHtml(e)}</li>`).join('')}</ul>`}

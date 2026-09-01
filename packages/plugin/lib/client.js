@@ -1,5 +1,5 @@
 (() => {
-  // packages/core/src/host.js
+  // ../core/src/host.js
   var Host = class {
     /** 连接路径片段为绝对路径（Node: path.join）。 */
     joinPath(..._parts) {
@@ -83,7 +83,7 @@
     }
   };
 
-  // packages/core/src/manifest.js
+  // ../core/src/manifest.js
   function validateManifest(m) {
     const errors = [];
     if (!m || typeof m !== "object" || Array.isArray(m)) return ["manifest.json \u7F3A\u5931\u6216\u4E0D\u662F\u5BF9\u8C61"];
@@ -151,7 +151,7 @@
     return false;
   }
 
-  // node_modules/.pnpm/fflate@0.8.3/node_modules/fflate/esm/browser.js
+  // ../../node_modules/.pnpm/fflate@0.8.3/node_modules/fflate/esm/browser.js
   var u8 = Uint8Array;
   var u16 = Uint16Array;
   var i32 = Int32Array;
@@ -625,42 +625,28 @@
     return files;
   }
 
-  // packages/core/src/dspack.js
-  var DSPK_MAGIC = "DSPK";
-  var DSPK_HEADER_SIZE = 8;
-  var DSPK_CONTAINER_VERSION = 2;
+  // ../core/src/dspack.js
   var encoder = new TextEncoder();
   var decoder = new TextDecoder();
-  function decodeHeader(header) {
-    if (!header || header.length < DSPK_HEADER_SIZE) return null;
-    const b = header.subarray(0, DSPK_HEADER_SIZE);
-    const magic = decoder.decode(b.subarray(0, 4));
-    const version = new DataView(b.buffer, b.byteOffset, b.byteLength).getUint32(4, true);
-    return { magic, version };
-  }
   function parseDspack(bytes) {
-    if (!(bytes instanceof Uint8Array) || bytes.length < DSPK_HEADER_SIZE) {
-      throw new Error("\u4E0D\u662F\u6709\u6548\u7684 .dspack \u6587\u4EF6\uFF08\u957F\u5EA6\u4E0D\u8DB3\uFF09");
+    if (!(bytes instanceof Uint8Array) || bytes.length === 0) {
+      throw new Error("\u4E0D\u662F\u6709\u6548\u7684 .dspack \u6587\u4EF6\uFF08\u7A7A\u5185\u5BB9\uFF09");
     }
-    const info = decodeHeader(bytes);
-    if (!info || info.magic !== DSPK_MAGIC) {
-      throw new Error("\u4E0D\u662F .dspack \u6587\u4EF6\uFF08\u7F3A\u5C11 DSPK \u5934\uFF0C\u53EF\u80FD\u88AB\u6539\u540E\u7F00\u6216\u5DF2\u635F\u574F\uFF09");
+    try {
+      return { entries: unzipSync(bytes) };
+    } catch {
+      throw new Error("\u4E0D\u662F\u6709\u6548\u7684 .dspack \u6587\u4EF6\uFF08\u65E0\u6CD5\u6309 ZIP \u89E3\u538B\uFF09");
     }
-    if (info.version !== DSPK_CONTAINER_VERSION) {
-      throw new Error(`\u4E0D\u652F\u6301\u8BE5 .dspack \u5BB9\u5668\u7248\u672C\uFF1A${info.version}\uFF08\u672C\u5DE5\u5177\u652F\u6301 ${DSPK_CONTAINER_VERSION}\uFF09`);
-    }
-    const entries = unzipSync(bytes.subarray(DSPK_HEADER_SIZE));
-    return { entries, version: info.version };
   }
   function decodeText(u82) {
     return decoder.decode(u82);
   }
 
-  // packages/core/src/inspect.js
+  // ../core/src/inspect.js
   async function inspectPack(host, source) {
     const bytes = source instanceof Uint8Array ? source : await host.readFile(host.resolvePath(source));
     if (!bytes) throw new Error("\u65E0\u6CD5\u8BFB\u53D6\u6574\u5408\u5305\u6587\u4EF6");
-    const { entries, version } = parseDspack(bytes);
+    const { entries } = parseDspack(bytes);
     let manifest = null;
     let validation;
     if (entries["manifest.json"]) {
@@ -687,7 +673,6 @@
     return {
       sha256: await host.sha256(bytes),
       size: bytes.byteLength,
-      containerVersion: version,
       valid: validation.length === 0,
       validation,
       manifest,
@@ -706,7 +691,7 @@
     }
   }
 
-  // packages/host-dsh-plugin/src/index.js
+  // ../host-dsh-plugin/src/index.js
   function isDshBridgeSupported(bridge) {
     return !!(bridge && typeof bridge.join === "function" && typeof bridge.readFile === "function" && typeof bridge.writeFile === "function");
   }
@@ -805,7 +790,7 @@
     }
   };
 
-  // packages/plugin/src/index.js
+  // src/index.js
   var name = "dsh-packforge";
   var viewPackBytes = (bytes) => inspectPack({ readFile: async () => bytes, sha256: sha256Bytes }, bytes);
   var DSPACK_READ_CAP = 512 * 1024 * 1024;
@@ -932,7 +917,7 @@
     return `'${s.replace(/'/g, `'\\''`)}'`;
   }
 
-  // packages/plugin/src/client.js
+  // src/client.js
   var PACKAGE_ID = "@dsh-packforge/plugin";
   var loader = globalThis.__ModuleLoader__;
   if (typeof loader?.load === "function") {

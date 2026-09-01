@@ -7,7 +7,7 @@ import { validateManifest, coordsToPkgDeps, sanitizeSlug } from './manifest.js';
  * 任一环节失败：删除 profile 目录整体回滚。
  *
  * 安全要点：
- * - .dspack 头校验（DSPK + version=2）由 parseDspack 负责；
+ * - .dspack 为标准 ZIP，格式合法性由 parseDspack（解压）与 manifest v4 校验共同保证；
  * - overrides/ 与 files[].path 的相对路径禁用 `..` 段（防逃逸）；
  * - target 名经 sanitizeSlug 规范化；同名 Profile 无 --force 时报错；
  * - 指定 expectedSha256/expectedSize 时先做完整性校验。

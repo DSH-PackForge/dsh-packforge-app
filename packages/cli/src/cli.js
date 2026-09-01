@@ -233,7 +233,7 @@ async function runView(host, args) {
   }
 
   log(`整合包 : ${source}`);
-  log(`容器   : .dspack v${r.containerVersion}  [${formatBytes(r.size)}]  sha256=${short(r.sha256)}`);
+  log(`容器   : 标准 ZIP  [${formatBytes(r.size)}]  sha256=${short(r.sha256)}`);
   log(`校验   : ${r.valid ? '合法 ✓' : '非法 ✗'}`);
   if (!r.valid) for (const err of r.validation) log(`         ✗ ${err}`);
 

@@ -112,7 +112,6 @@ test('viewPackBytes：浏览器内就地解析 .dspack（无 node:fs）', async 
   const entries = { 'manifest.json': encodeText(JSON.stringify({ manifestVersion: 4, version: '1.0.0', type: 'profile' })) };
   const bytes = buildDspack(entries);
   const r = await viewPackBytes(bytes);
-  assert.equal(r.containerVersion, 2);
   assert.equal(r.totalEntries, 1);
   assert.equal(r.sha256.length, 64); // WebCrypto 计算出的 hex
 });

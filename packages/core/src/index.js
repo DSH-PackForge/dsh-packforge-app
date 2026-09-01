@@ -26,17 +26,7 @@ export {
   compareVersions,
   sortVersionsDesc,
 } from './discovery.js';
-export {
-  buildDspack,
-  parseDspack,
-  encodeHeader,
-  decodeHeader,
-  encodeText,
-  decodeText,
-  DSPK_MAGIC,
-  DSPK_HEADER_SIZE,
-  DSPK_CONTAINER_VERSION,
-} from './dspack.js';
+export { buildDspack, parseDspack, encodeText, decodeText } from './dspack.js';
 export { packProfile, dspackEntryPath } from './pack.js';
 export { exportRepo, renderReadme, renderDspackIgnore, REPO_CONTENT_LEVELS, REPO_CONTENT_LABEL } from './repo.js';
 export { inspectProfile, inspectPack } from './inspect.js';

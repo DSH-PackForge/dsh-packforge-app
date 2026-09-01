@@ -20,7 +20,7 @@
 - 图形化整合包管理工具；范围 = **导出 / 导入 / 市场浏览**（**不做启动**）。
 - 形态 = **Electron 桌面端(先) + DSH 客户端插件(后)**，同一 monorepo `dsh-packforge-app`。
 - 格式 = **最新规范**：manifest **v4** + pack-structure **v2（`.dspack`）**；不做 v3/`.tgz` 兼容。
-  - `.dspack` = 8 字节头（`DSPK` + uint32 LE version=2）+ ZIP；根 `manifest.json` + 机器文件，用户文件进 `overrides/`。
+  - `.dspack` = 标准 ZIP（无自定义魔数头，压缩软件可直接打开）；根 `manifest.json` + 机器文件，用户文件进 `overrides/`。
   - v4 = 坐标→固定版本（v3 §5 继承）+ `type:"profile"` + `files[]`（`{path,sha256,size,urls[]}`）。
 
 ## 2. 两个 profile 根（实测，勿再调研）
@@ -50,8 +50,8 @@
       按目录去重、跳过 node_modules/__temp__/点目录）+ `dshVersion` 精确钉定（启动器 `versions[]` 取最新）
       + 依赖精确版本钉定（`coordinatesFromProfileDeps` 读 node_modules）+ `cli` 门面（list/pack/inspect）。
       真实环境冒烟通过：list 出经典 8 + 启动器实例 4（去重后）；pack web → `web-1.0.0.dspack`，
-      `containerVersion=2 / manifestVersion=4 / dshVersion=0.1.1-rc.2 / validate=[]`。
-- [x] **M2 导入**：`core/src/install.js` 安装闭环（本地/URL → DSPK 头校验 → manifest v4 校验 → overrides/ 落盘
+      `manifestVersion=4 / dshVersion=0.1.1-rc.2 / validate=[]`（标准 ZIP 容器）。
+- [x] **M2 导入**：`core/src/install.js` 安装闭环（本地/URL → ZIP 解压 → manifest v4 校验 → overrides/ 落盘
       → package.json 重建（coordsToPkgDeps）→ pnpm install（frozen-lockfile 失配自动回退）→ files[] 下载+sha256/size
       → reconcile（bundle 缺 `dsh.bundle.patch` → 回滚；依赖带 patch → 自动补进层栈）→ 失败整目录回滚）。
       Host 契约扩 `exec`/`download`/`move`；cli 新增 `install`（--no-install/--dry-run/--force/--registry/--sha256/--size）。

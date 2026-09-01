@@ -121,7 +121,6 @@ test('DshPluginHost：经桥接打包 .dspack 并读回（无 node:fs）', async
   assert.ok(bytes);
   const view = await inspectPack(host, bytes);
   assert.equal(view.valid, true);
-  assert.equal(view.containerVersion, 2);
   assert.equal(view.manifest.name, 'web');
   assert.equal(view.manifest.dshVersion, '0.1.1-rc.2');
 });

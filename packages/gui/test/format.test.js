@@ -5,7 +5,6 @@ import { packViewHTML, marketCardHTML, manifestHTML, treeFromPaths, escapeHtml, 
 const FIXTURE = {
   sha256: 'a'.repeat(64),
   size: 11172,
-  containerVersion: 2,
   valid: true,
   validation: [],
   manifest: {
@@ -35,7 +34,7 @@ test('packViewHTML：渲染校验态/manifest/tree', () => {
   const html = packViewHTML(FIXTURE);
   assert.match(html, /校验合法/);
   assert.match(html, /manifest v4/);
-  assert.match(html, /\.dspack v2/);
+  assert.match(html, /标准 ZIP/);
   assert.match(html, /web/);
   assert.match(html, /v1\.0\.0/);
   assert.match(html, /overrides\//);

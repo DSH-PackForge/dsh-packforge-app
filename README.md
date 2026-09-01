@@ -5,7 +5,7 @@ DSH 整合包平台 · **图形化管理工具**（一个 monorepo，两种宿�
 像玩 Minecraft 整合包一样，一键导出、导入、浏览 DSH AI 智能体配置包。本项目遵循**最新规范**：
 
 - **manifest v4**（`DSH-PackForge/specs/manifest/v4.md`）：可复现层栈契约 + `type` + `files[]`
-- **pack-structure v2 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v2.md`）：`DSPK` 头 + ZIP + `overrides/`
+- **pack-structure v2 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v2.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
 
 ## 包结构（pnpm workspace）
 
