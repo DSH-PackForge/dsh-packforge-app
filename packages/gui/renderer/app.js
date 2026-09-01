@@ -123,6 +123,7 @@ function exportOpts() {
   return {
     displayName: $('export-display').value.trim() || undefined,
     description: $('export-desc').value.trim() || undefined,
+    author: $('export-author').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
     include: includedArray(),
   };
@@ -328,6 +329,7 @@ function init() {
   $('export-profile').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
   $('export-desc').addEventListener('change', updatePreview);
+  $('export-author').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
   $('export-select-all').addEventListener('change', onSelectAll);
   $('export-files').addEventListener('change', onPickerChange);

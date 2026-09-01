@@ -139,6 +139,7 @@ export function exportPreviewHTML(ins) {
   <table class="kv">
     <tr><td>整合包</td><td>${escapeHtml(m.name)} <span class="muted">v${escapeHtml(String(m.version))}</span></td></tr>
     <tr><td>展示名</td><td>${escapeHtml(disp)}</td></tr>
+    <tr><td>作者</td><td>${m.author ? escapeHtml(m.author) : '<span class="muted">未填写</span>'}</td></tr>
     <tr><td>DSH 版本</td><td>${m.dshVersion ? escapeHtml(m.dshVersion) : '<span class="muted">最新（未钉定）</span>'}</td></tr>
     <tr><td>层栈</td><td>${bundles.length ? bundles.map(escapeHtml).join(', ') : '<span class="muted">无</span>'}</td></tr>
     <tr><td>依赖</td><td>${deps.length ? deps.map(escapeHtml).join(', ') : '<span class="muted">无</span>'}</td></tr>
