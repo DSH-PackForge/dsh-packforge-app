@@ -10,14 +10,16 @@ function setStatus(msg, kind = '') {
   el.className = `status ${kind}`;
 }
 
+function switchTab(tab) {
+  document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.pane').forEach((p) => {
+    p.hidden = p.id !== `pane-${tab}`;
+  });
+}
+
 function bindTabs() {
   document.querySelectorAll('[data-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b === btn));
-      document.querySelectorAll('.pane').forEach((p) => {
-        p.hidden = p.id !== `pane-${btn.dataset.tab}`;
-      });
-    });
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 }
 
@@ -350,6 +352,13 @@ function init() {
     setStatus('未检测到 Electron 桥（window.packforge）。请用桌面端运行：pnpm --filter gui start', 'err');
     return;
   }
+  // 注册 URL 协议导入：dspack://install?url=<http(s)://…>
+  bridge.onProtocolUrl?.((url) => {
+    if (!url) return;
+    switchTab('import');
+    $('import-source').value = url;
+    setStatus('收到整合包链接（dspack://），确认后点「安装」', 'ok');
+  });
   refreshMarket();
   initExport();
 }
