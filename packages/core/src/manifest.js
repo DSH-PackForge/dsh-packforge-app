@@ -165,19 +165,74 @@ export function isExactSemver(v) {
 
 /**
  * 生成 v4 dependencies（坐标→固定版本）：
- * - git 依赖交给 pkgDepsToCoords（钉 commit sha）；
+ * - git 依赖：commit sha 优先取 package.json 的 `#sha`，缺则从 pnpm-lock.yaml 的 resolution.commit 补齐，
+ *   仍缺则抛错（v3/v4 要求 git 依赖钉死 sha，静默写空会产出非法 manifest）；
  * - npm 依赖若仍是范围（^/~ 等），读 node_modules/<name>/package.json 的实测版本钉精确。
  */
 export async function coordinatesFromProfileDeps(host, dir, deps) {
   if (!deps || typeof deps !== 'object' || Array.isArray(deps)) return {};
-  const coords = pkgDepsToCoords(deps);
-  for (const [coord, spec] of Object.entries(coords)) {
-    if (coord.startsWith('github:')) continue; // 已钉 sha
-    if (typeof spec !== 'string' || !spec || isExactSemver(spec)) continue;
-    const v = await readInstalledVersion(host, host.joinPath(dir, 'node_modules', coord, 'package.json'));
-    if (v) coords[coord] = v;
+  const lockText = await host.readTextFile(host.joinPath(dir, 'pnpm-lock.yaml'));
+  const out = {};
+  for (const [pkgName, spec] of Object.entries(deps)) {
+    const git = parsePkgGitSpec(spec);
+    if (git) {
+      const sha = git.sha || gitCommitFromLock(lockText, pkgName);
+      if (!sha) {
+        throw new Error(
+          `git 依赖「${pkgName}」缺少 commit sha：请把 package.json 的版本写成 ${typeof spec === 'string' ? spec : '#<commit-sha>'}#<commit-sha>` +
+            `，或先执行 pnpm install 生成 pnpm-lock.yaml 再导出`,
+        );
+      }
+      out[`github:${git.owner}/${git.repo}${git.subpath ? `#path:/${git.subpath}` : ''}`] = sha;
+      continue;
+    }
+    if (typeof spec === 'string' && spec && !isExactSemver(spec)) {
+      const v = await readInstalledVersion(host, host.joinPath(dir, 'node_modules', pkgName, 'package.json'));
+      out[pkgName] = v ?? spec;
+    } else {
+      out[pkgName] = spec;
+    }
   }
-  return coords;
+  return out;
+}
+
+/**
+ * 从 pnpm-lock.yaml 解析某 git 依赖的 commit sha（40 位十六进制）。
+ * 扫描 `packages:` 区块内 `pkgName@…` 条目，取其 resolution.commit；找不到返回 null。
+ */
+export function gitCommitFromLock(text, pkgName) {
+  if (!text || !pkgName) return null;
+  const lines = String(text).split(/\r?\n/);
+  let inPackages = false;
+  let active = -1; // 目标条目的 key 缩进；-1 = 不在目标条目内
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (!inPackages) {
+      if (/^packages:\s*$/.test(trimmed)) inPackages = true;
+      continue;
+    }
+    const indent = line.length - line.trimStart().length;
+    if (trimmed.endsWith(':') && indent === 0) {
+      if (/^packages:\s*$/.test(trimmed)) { active = -1; continue; }
+      break; // 顶层区块（snapshots: 等）→ packages 结束
+    }
+    const key = line.match(/^\s*([^:]+):\s*$/);
+    if (key) {
+      const k = key[1].replace(/^["']|["']$/g, '');
+      if (k === pkgName || k.startsWith(`${pkgName}@`)) {
+        active = indent;
+      } else if (active >= 0 && indent <= active) {
+        active = -1;
+      }
+      continue;
+    }
+    if (active >= 0) {
+      const cm = line.match(/\bcommit:\s*['"]?([0-9a-f]{40})['"]?/);
+      if (cm) return cm[1];
+    }
+  }
+  return null;
 }
 
 async function readInstalledVersion(host, pkgPath) {

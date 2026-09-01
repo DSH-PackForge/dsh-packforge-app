@@ -10,6 +10,7 @@ export {
   coordsToPkgDeps,
   pkgDepsToCoords,
   coordinatesFromProfileDeps,
+  gitCommitFromLock,
   isExactSemver,
   parseGitCoord,
   parsePkgGitSpec,
