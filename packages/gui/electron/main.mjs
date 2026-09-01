@@ -37,11 +37,13 @@ function registerIpc() {
   ipcMain.handle('dsh:versions', () => core.listInstalledDshVersions(host));
   ipcMain.handle('pack:install', (_e, opts) => core.installPack(host, opts));
 
-  ipcMain.handle('market:list', async () => {
+  ipcMain.handle('market:list', async (_e, source) => {
+    const indexPath = source || MARKET_INDEX;
     try {
-      return await core.readMarketIndex(host, MARKET_INDEX);
+      const r = await core.readMarketIndex(host, indexPath);
+      return { ...r, source: indexPath };
     } catch (e) {
-      return { schemaVersion: 1, generatedAt: null, packs: [], error: e.message };
+      return { schemaVersion: 1, generatedAt: null, packs: [], error: e.message, source: indexPath };
     }
   });
 }

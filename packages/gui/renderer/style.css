@@ -288,6 +288,10 @@ h3:first-child { margin-top: 0; }
 .fp-dir { color: var(--fg-2); font-weight: 600; }
 .pre-file { margin-top: 10px; color: var(--muted); }
 
+/* ---------- 市场 ---------- */
+.market-empty { grid-column: 1 / -1; padding: 18px; }
+.market-empty p { margin: 2px 0; }
+
 /* ---------- 结果条 ---------- */
 .result {
   white-space: pre-wrap; margin-top: 14px; padding: 14px 16px;

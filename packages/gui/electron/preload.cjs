@@ -11,6 +11,6 @@ contextBridge.exposeInMainWorld('packforge', {
   exportPack: (opts) => ipcRenderer.invoke('profiles:export', opts),
   exportRepo: (opts) => ipcRenderer.invoke('profiles:exportRepo', opts),
   installPack: (opts) => ipcRenderer.invoke('pack:install', opts),
-  marketList: () => ipcRenderer.invoke('market:list'),
+  marketList: (source) => ipcRenderer.invoke('market:list', source),
   onProtocolUrl: (cb) => ipcRenderer.on('protocol-url', (_e, url) => cb(url)),
 });

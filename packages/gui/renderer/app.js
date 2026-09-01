@@ -24,12 +24,23 @@ function bindTabs() {
 }
 
 /* ---- 市场浏览 ---- */
-async function refreshMarket() {
+async function refreshMarket(source) {
   const out = $('market-out');
   out.innerHTML = '<p class="muted">加载中…</p>';
-  const r = await bridge.marketList();
-  if (!r.packs.length) {
-    out.innerHTML = `<p class="muted">${r.error ? '索引读取失败：' + r.error : '无市场条目（默认拉取官方站点，可用 DSHPACK_MARKET_INDEX 覆盖）'}</p>`;
+  let r;
+  try {
+    r = await bridge.marketList(source);
+  } catch (e) {
+    r = { packs: [], error: String(e?.message ?? e) };
+  }
+  if (!Array.isArray(r?.packs) || !r.packs.length) {
+    const reason = r?.error ? `加载失败：${r.error}` : '官方市场暂无已收录的整合包';
+    const src = r?.source || source || '官方站点';
+    out.innerHTML = `
+      <div class="market-empty panel">
+        <p class="${r?.error ? 'err' : 'muted'}">${escape(reason)}</p>
+        <p class="muted">来源：${escape(src)} · 可点右上角「从本地加载」选 index.json 预览</p>
+      </div>`;
     return;
   }
   out.innerHTML = r.packs.map((p) => marketCardHTML(p)).join('');
@@ -324,7 +335,11 @@ function escape(s) {
 /* ---- boot ---- */
 function init() {
   bindTabs();
-  $('market-reload').addEventListener('click', refreshMarket);
+  $('market-reload').addEventListener('click', () => refreshMarket());
+  $('market-local').addEventListener('click', async () => {
+    const p = await bridge.selectFile([{ name: '市场索引', extensions: ['json'] }]);
+    if (p) refreshMarket(p);
+  });
   $('market-out').addEventListener('click', (e) => {
     const btn = e.target.closest('.card-install');
     if (btn) installFromMarket(btn);
