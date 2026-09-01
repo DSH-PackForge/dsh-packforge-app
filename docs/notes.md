@@ -94,3 +94,14 @@
 - 桥：`main.mjs` 增 `profiles:exportRepo`；`preload.cjs` 增 `exportRepo`；`format.js` 增 `exportRepoResultHTML` + `REPO_CONTENT_LABEL`。
 - 测试：core 42 / gui 9 / host-dsh-plugin 3 / plugin 6 = **60 全绿**。
 - 待办（未做）：仓库→`.dspack` 的反向重打包（repack 读取 `.dspackignore` 的实际生效逻辑）；CLI 加 `export`/`pack --repo` 形态。
+
+## 9. 插件两个需求的 DSH 契约（R8 · 已确证，见 `docs/dsh-plugin-集成契约.md`）
+
+用户两个需求，源码确证结论：
+- **需求 1（AI 自主导出）**：工具注册 `ctx.tools.register(defineTool({name,description,parameters,output,execute}))`，
+  属 **host 面（Node）**；真实示例 `dsh-tool-todo`。可选 `ctx.systemPrompt.section({order:150})` 引导模型何时用。
+- **需求 2（设置面板加「整合包」）**：slot 系统 `ctx.slots.inject("settings.section", () => ctx.slots.register({id,order,label}, React组件))`，
+  属 **client 面（web）**；`order`：通用=0/模型=10/插件=15 → 整合包=20。真实示例 `dsh-client-ui-settings-models`。
+- 结论：需 **新建 `@dsh-packforge/host-plugin`（host 工具）** + **改造现有 `plugin`（client settings section）**，共享 core。
+- 关键技术点：client 插件 `dsh.client.inject` 要加 `ui-settings/locale/ui-slots`（列 peerDeps）；esbuild 把 `react`+`@deepseek-ai/*` 标 external。
+- 待确证：host 插件的「安装进 DSH」途径（`dsh-host-plugin-inventory`）；真机联调（沙箱起不了 DSH Web GUI）。
