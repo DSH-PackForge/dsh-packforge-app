@@ -123,6 +123,8 @@ function currentProfile() {
 
 function exportOpts() {
   return {
+    name: $('export-name').value.trim() || undefined,
+    version: $('export-version').value.trim() || undefined,
     displayName: $('export-display').value.trim() || undefined,
     description: $('export-desc').value.trim() || undefined,
     author: $('export-author').value.trim() || undefined,
@@ -331,6 +333,8 @@ function init() {
   $('export-go').addEventListener('click', doExport);
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
   $('export-profile').addEventListener('change', updatePreview);
+  $('export-name').addEventListener('change', updatePreview);
+  $('export-version').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
   $('export-desc').addEventListener('change', updatePreview);
   $('export-author').addEventListener('change', updatePreview);
