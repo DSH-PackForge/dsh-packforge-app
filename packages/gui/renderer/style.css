@@ -305,20 +305,34 @@ h3:first-child { margin-top: 0; }
 .toolbar { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
 .toolbar .muted { font-size: 12.5px; }
 
-/* 字段分组（导出表单） */
+/* 字段分组（导出表单）：两列流式网格，短字段并排、长字段跨列 */
 .field-group {
-  display: flex; flex-direction: column; gap: 13px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 11px 14px; align-items: start;
   padding: 15px 16px; border: 1px solid var(--line-2); border-radius: var(--r-md);
   background: var(--bg-2);
 }
 .field-group-title {
+  grid-column: 1 / -1;
   font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--faint);
 }
+.field-group.switch-group { display: flex; flex-direction: column; gap: 9px; }
+.field.span-2 { grid-column: 1 / -1; }
+.switch-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .field-group + .field-group, .field-group + .field { margin-top: 0; }
 
 /* ---------- 导出页 ---------- */
 .export-layout { display: grid; grid-template-columns: 380px 1fr; gap: 18px; align-items: start; }
+/* 导出页：折叠选项、大按钮、底部摘要 */
+.more-options { border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--bg-2); padding: 12px 16px; }
+.more-options summary { cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 600; user-select: none; }
+.more-options[open] summary { margin-bottom: 13px; }
+.more-options .field { margin-bottom: 11px; }
+.more-options .field:last-child { margin-bottom: 0; }
+.export-actions { display: flex; align-items: center; gap: 12px; }
+.primary-lg { width: 100%; padding: 12px 18px; font-size: 15px; font-weight: 650; }
+.summary-box { padding: 10px 14px; border: 1px dashed var(--line-2); border-radius: 9px; background: var(--bg-2); color: var(--muted); font-size: 12.5px; min-height: 20px; }
+.summary-box.err { color: var(--bad); border-color: rgba(229, 72, 77, 0.4); }
 @media (max-width: 820px) { .export-layout { grid-template-columns: 1fr; } }
 .preview-title { margin: 0 0 14px; font-size: 13px; font-weight: 650; color: var(--fg-2); }
 .special-head { margin: 14px 0 0; font-size: 12.5px; font-weight: 600; color: var(--accent); }

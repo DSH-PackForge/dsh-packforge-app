@@ -35,6 +35,7 @@ function registerIpc() {
   ipcMain.handle('profiles:exportRepo', (_e, opts) => core.exportRepo(host, opts.profile, opts));
   ipcMain.handle('profiles:inspect', (_e, opts) => core.inspectProfile(host, opts.profile, opts));
   ipcMain.handle('home:list', () => core.discoverHomes(host));
+  ipcMain.handle('home:inspect', (_e, opts) => core.inspectHome(host, opts.home, opts));
   ipcMain.handle('home:export', (_e, opts) => {
     // opts.home = { name, dir }；否则 opts.root = profiles 目录，向上推导 home。
     const dir = opts.home?.dir || (opts.root ? path.dirname(opts.root) : null);

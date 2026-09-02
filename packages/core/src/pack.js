@@ -89,7 +89,12 @@ export async function packHome(host, home, opts = {}) {
   if (scan.files.length === 0) {
     throw new Error(`DSH_HOME「${home.name}」没有可打包的文件（全部被过滤或目录为空）`);
   }
-  const files = selectFiles(scan.files, opts.include);
+  let files = selectFiles(scan.files, opts.include);
+  // exclude：黑名单（rel 前缀），供「导出内容」开关排除 skill / preset / 指令 / 数据
+  const excludes = opts.exclude ?? [];
+  if (excludes.length) {
+    files = files.filter((f) => !excludes.some((p) => f.rel === p || f.rel.startsWith(p)));
+  }
   if (files.length === 0) {
     throw new Error(`没有选中的文件（请至少勾选一个文件/目录）`);
   }

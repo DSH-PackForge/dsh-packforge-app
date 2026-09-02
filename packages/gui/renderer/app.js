@@ -1,5 +1,5 @@
 // 渲染进程逻辑（浏览器 ESM，仅依赖纯展示模块 format.js + Electron 桥 window.packforge）。
-import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML, exportRepoResultHTML, specialFieldHTML } from '../src/format.js';
+import { packViewHTML, marketCardHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
 
 const bridge = window.packforge ?? null;
 const $ = (id) => document.getElementById(id);
@@ -156,120 +156,42 @@ function exportOpts() {
     icon: $('export-icon').value.trim() || undefined,
     profileName: $('export-profilename').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
-    include: includedArray(),
-    homeInclude: homeIncludedArray(),
+    homeInclude: homeIncludeFromSwitches(),
   };
 }
 
-/* 文件(夹)选择（勾选要打进包的内容） */
-let exportAllFiles = [];
-let exportIncluded = null; // null = 全选；否则 Set<rel>
-let exportHomeFiles = [];      // 上一级目录（DSH_HOME）候选，勾选后进 home/
-let exportHomeIncluded = null; // null = 不带 home 级；否则 Set<rel>
+/* 导出内容开关：上一级目录（DSH_HOME）内容的分类开关 */
+let homeCats = { skills: [], presets: [], instructions: [], other: [] };
 
-function homeIncludedArray() {
-  return exportHomeIncluded == null ? undefined : [...exportHomeIncluded];
-}
-
-function includeSet() {
-  return exportIncluded ?? new Set(exportAllFiles.map((f) => f.rel));
-}
-
-function includedArray() {
-  return exportIncluded == null ? undefined : [...exportIncluded];
-}
-
-function dirLeafFiles(dir) {
-  return exportAllFiles
-    .filter((f) => f.rel === dir || f.rel.startsWith(dir + '/'))
-    .map((f) => f.rel);
-}
-
-function setIncluded(rels, on) {
-  const set = new Set(includeSet());
-  for (const r of rels) { if (on) set.add(r); else set.delete(r); }
-  exportIncluded = set.size === exportAllFiles.length ? null : set;
-}
-
-function buildExportTree(files) {
-  const root = new Map();
-  for (const f of files) {
-    const parts = String(f.rel).split('/');
-    let node = root;
-    for (let i = 0; i < parts.length; i++) {
-      const name = parts[i];
-      const isLeaf = i === parts.length - 1;
-      if (!node.has(name)) {
-        node.set(name, { name, path: parts.slice(0, i + 1).join('/'), isDir: !isLeaf, children: isLeaf ? null : new Map() });
-      }
-      if (isLeaf) break;
-      node = node.get(name).children;
-    }
+function categorizeHomeFiles(files) {
+  const skills = [];
+  const presets = [];
+  const instructions = [];
+  const other = [];
+  for (const f of files ?? []) {
+    const rel = String(f.rel || '');
+    if (rel.startsWith('skills/')) skills.push(f);
+    else if (rel.startsWith('.agent-presets/')) presets.push(f);
+    else if (rel === 'AGENTS.md') instructions.push(f);
+    else other.push(f);
   }
-  return [...root.values()];
+  return { skills, presets, instructions, other };
 }
 
-function treeNodesHTML(nodes, set) {
-  return nodes.map((n) => {
-    if (n.isDir) {
-      const kids = [...n.children.values()];
-      return `<li><div class="fp-row"><input type="checkbox" data-dir="${escape(n.path)}"> <span class="fp-dir">${escape(n.name)}/</span></div>${kids.length ? `<ul>${treeNodesHTML(kids, set)}</ul>` : ''}</li>`;
-    }
-    return `<li><div class="fp-row"><input type="checkbox" data-file="${escape(n.path)}" ${set.has(n.path) ? 'checked' : ''}> <span>${escape(n.name)}</span></div></li>`;
-  }).join('');
+function renderHomeContentSwitches() {
+  $('export-skill-count').textContent = homeCats.skills.length ? `（${homeCats.skills.length} 个）` : '（无）';
+  $('export-preset-count').textContent = homeCats.presets.length ? `（${homeCats.presets.length} 个）` : '（无）';
+  $('export-skill').disabled = !homeCats.skills.length;
+  $('export-preset').disabled = !homeCats.presets.length;
+  $('export-instruction').disabled = !homeCats.instructions.length;
 }
 
-function renderFilePicker() {
-  const field = $('export-files-field');
-  const box = $('export-files');
-  if (!exportAllFiles.length && !exportHomeFiles.length) {
-    field.hidden = true;
-    box.innerHTML = '';
-    return;
-  }
-  field.hidden = false;
-  const set = includeSet();
-  let html = '';
-  if (exportAllFiles.length) {
-    html += `<div class="fp-group">Profile 文件</div><ul class="fp-tree">${treeNodesHTML(buildExportTree(exportAllFiles), set)}</ul>`;
-  }
-  if (exportHomeFiles.length) {
-    html += `<div class="fp-group">上一级目录（DSH_HOME，可选）</div>${homeFilesHTML(exportHomeIncluded ?? new Set())}`;
-  }
-  box.innerHTML = html;
-  box.querySelectorAll('input[data-dir]').forEach((cb) => {
-    const files = dirLeafFiles(cb.dataset.dir);
-    const sel = files.filter((r) => set.has(r)).length;
-    cb.checked = files.length > 0 && sel === files.length;
-    cb.indeterminate = sel > 0 && sel < files.length;
-  });
-  $('export-select-all').checked = exportIncluded == null;
-  $('export-files-count').textContent = `${set.size} / ${exportAllFiles.length} 个文件`;
-}
-
-/** 上一级目录（DSH_HOME）候选：平铺 checkbox 列表，勾选后进 home/。 */
-function homeFilesHTML(set) {
-  return exportHomeFiles.map((f) => {
-    const checked = set.has(f.rel) ? 'checked' : '';
-    return `<label class="check fp-row"><input type="checkbox" data-home-file="${escape(f.rel)}" ${checked}> <span class="mono">${escape(f.rel)}</span></label>`;
-  }).join('');
-}
-
-function onSelectAll(e) {
-  exportIncluded = e.target.checked ? null : new Set();
-  updatePreview();
-}
-
-function onPickerChange(e) {
-  const t = e.target;
-  if (t.dataset.dir) setIncluded(dirLeafFiles(t.dataset.dir), t.checked);
-  else if (t.dataset.file) setIncluded([t.dataset.file], t.checked);
-  else if (t.dataset.homeFile) {
-    const set = new Set(exportHomeIncluded ?? []);
-    if (t.checked) set.add(t.dataset.homeFile); else set.delete(t.dataset.homeFile);
-    exportHomeIncluded = set.size ? set : null;
-  } else return;
-  updatePreview();
+function homeIncludeFromSwitches() {
+  const rels = [];
+  if ($('export-skill').checked) for (const f of homeCats.skills) rels.push(f.rel);
+  if ($('export-preset').checked) for (const f of homeCats.presets) rels.push(f.rel);
+  if ($('export-instruction').checked) for (const f of homeCats.instructions) rels.push(f.rel);
+  return rels.length ? rels : undefined;
 }
 
 function onModeChange() {
@@ -280,25 +202,28 @@ function onModeChange() {
 }
 
 async function updatePreview() {
-  const box = $('export-preview');
+  const summary = $('export-summary');
   const p = currentProfile();
   if (!p) {
-    box.innerHTML = '<p class="muted">选择 Profile 后显示打包预览</p>';
-    $('export-files-field').hidden = true;
-    $('export-files').innerHTML = '';
-    $('export-special').innerHTML = '<span class="muted">选择 Profile 后显示</span>';
+    summary.textContent = '';
     return;
   }
-  box.innerHTML = '<p class="muted">扫描中…</p>';
+  summary.className = 'summary-box';
+  summary.textContent = '扫描中…';
   try {
     const ins = await bridge.inspectProfile({ profile: { name: p.name, dir: p.dir }, ...exportOpts() });
-    exportAllFiles = ins.allFiles ?? ins.files ?? [];
-    exportHomeFiles = ins.homeFiles ?? [];
-    renderFilePicker();
-    $('export-special').innerHTML = specialFieldHTML(ins.special);
-    box.innerHTML = exportPreviewHTML(ins);
+    homeCats = categorizeHomeFiles(ins.homeFiles ?? []);
+    renderHomeContentSwitches();
+    const m = ins.manifest;
+    const parts = [`${m.name}@${m.version}`];
+    if ((m.bundles ?? []).length) parts.push(`${m.bundles.length} 个 bundle`);
+    if (homeCats.skills.length) parts.push(`${homeCats.skills.length} 个 skill`);
+    if (homeCats.presets.length) parts.push(`${homeCats.presets.length} 个预设`);
+    if (homeCats.instructions.length) parts.push('含全局指令');
+    summary.textContent = '将导出：' + parts.join(' · ');
   } catch (e) {
-    box.innerHTML = `<p class="err">预览失败：${escape(e.message)}</p>`;
+    summary.className = 'summary-box err';
+    summary.textContent = `预览失败：${e.message}`;
   }
 }
 
@@ -377,12 +302,66 @@ function currentHome() {
   return idx === '' ? null : exportHomes[Number(idx)];
 }
 
-function updateHomePreview() {
-  const box = $('home-preview');
+/* dshhome 导出内容开关 */
+let homeContent = { skills: [], presets: [], instructions: [], data: [] };
+
+function categorizeHomeContent(files) {
+  const skills = [];
+  const presets = [];
+  const instructions = [];
+  const data = [];
+  for (const f of files ?? []) {
+    const rel = String(f.rel || '');
+    if (rel.startsWith('skills/')) skills.push(f);
+    else if (rel.startsWith('.agent-presets/')) presets.push(f);
+    else if (rel === 'AGENTS.md') instructions.push(f);
+    else if (rel.startsWith('data/')) data.push(f);
+  }
+  return { skills, presets, instructions, data };
+}
+
+function renderHomeSwitches() {
+  $('home-skill-count').textContent = homeContent.skills.length ? `（${homeContent.skills.length} 个）` : '（无）';
+  $('home-preset-count').textContent = homeContent.presets.length ? `（${homeContent.presets.length} 个）` : '（无）';
+  $('home-skill').disabled = !homeContent.skills.length;
+  $('home-preset').disabled = !homeContent.presets.length;
+  $('home-instruction').disabled = !homeContent.instructions.length;
+  $('home-data').disabled = !homeContent.data.length;
+}
+
+function homeExcludeFromSwitches() {
+  const excludes = [];
+  if (!$('home-skill').checked) excludes.push('skills/');
+  if (!$('home-preset').checked) excludes.push('.agent-presets/');
+  if (!$('home-instruction').checked) excludes.push('AGENTS.md');
+  if (!$('home-data').checked) excludes.push('data/');
+  return excludes.length ? excludes : undefined;
+}
+
+async function updateHomePreview() {
+  const summary = $('home-summary');
   const h = currentHome();
-  box.innerHTML = h
-    ? '<p>将把整个 DSH_HOME 打包为 dshhome 整合包：</p><ul><li>多个 profile（排除 web / headless 安装基线）</li><li>.agent-presets/ 预设</li><li>skills/ 技能</li><li>AGENTS.md 全局指令</li><li>data/ 全局数据</li></ul>'
-    : '<p class="muted">选择 DSH_HOME 后显示</p>';
+  if (!h) {
+    summary.textContent = '';
+    return;
+  }
+  summary.className = 'summary-box';
+  summary.textContent = '扫描中…';
+  try {
+    const ins = await bridge.inspectHome({ home: { name: h.name, dir: h.dir } });
+    homeContent = categorizeHomeContent(ins.allFiles ?? ins.files ?? []);
+    renderHomeSwitches();
+    const profiles = Object.keys(ins.manifest?.profiles ?? {});
+    const parts = [`${ins.manifest?.name}@${ins.manifest?.version}`, `${profiles.length} 个 profile`];
+    if (homeContent.skills.length) parts.push(`${homeContent.skills.length} 个 skill`);
+    if (homeContent.presets.length) parts.push(`${homeContent.presets.length} 个预设`);
+    if (homeContent.instructions.length) parts.push('含全局指令');
+    if (homeContent.data.length) parts.push(`${homeContent.data.length} 个数据文件`);
+    summary.textContent = '将导出：' + parts.join(' · ');
+  } catch (e) {
+    summary.className = 'summary-box err';
+    summary.textContent = `扫描失败：${e.message}`;
+  }
 }
 
 async function doExportHome() {
@@ -406,6 +385,7 @@ async function doExportHome() {
       icon: $('home-icon').value.trim() || undefined,
       dshVersion: $('home-dsh').value || undefined,
       defaultProfile: $('home-default-profile').value.trim() || undefined,
+      exclude: homeExcludeFromSwitches(),
       out,
     });
     result.innerHTML = exportResultHTML(r);
@@ -510,8 +490,9 @@ function init() {
   $('export-icon').addEventListener('change', updatePreview);
   $('export-profilename').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
-  $('export-select-all').addEventListener('change', onSelectAll);
-  $('export-files').addEventListener('change', onPickerChange);
+  $('export-skill').addEventListener('change', updatePreview);
+  $('export-preset').addEventListener('change', updatePreview);
+  $('export-instruction').addEventListener('change', updatePreview);
   $('export-mode').addEventListener('change', onModeChange);
   $('export-content').addEventListener('change', updatePreview);
   $('export-refresh').addEventListener('click', initExport);
@@ -532,6 +513,10 @@ function init() {
     btn.addEventListener('click', () => switchExportTab(btn.dataset.exportTab));
   });
   $('home-sel').addEventListener('change', updateHomePreview);
+  $('home-skill').addEventListener('change', updateHomePreview);
+  $('home-preset').addEventListener('change', updateHomePreview);
+  $('home-instruction').addEventListener('change', updateHomePreview);
+  $('home-data').addEventListener('change', updateHomePreview);
   $('home-refresh').addEventListener('click', initExportHome);
   $('home-go').addEventListener('click', doExportHome);
   $('home-browse').addEventListener('click', async () => {
