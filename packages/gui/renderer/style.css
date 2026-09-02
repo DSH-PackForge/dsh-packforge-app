@@ -1,26 +1,26 @@
 /* DSH PackForge — 现代桌面观感（DeepSeek 品牌蓝 + 中性冷灰）。 */
 
 :root {
-  --accent: #4d6bfe;
-  --accent-strong: #3b55d9;
-  --accent-soft: #3b55d9;
-  --accent-bg: rgba(77, 107, 254, 0.10);
-  --accent-ring: rgba(77, 107, 254, 0.24);
-  --nav-active-fg: #2f4ad0;
+  --accent: #4176e6;
+  --accent-strong: #4868b2;
+  --accent-soft: #4868b2;
+  --accent-bg: rgba(65, 118, 230, 0.10);
+  --accent-ring: rgba(65, 118, 230, 0.24);
+  --nav-active-fg: #3a5fa0;
 
-  --bg: #f4f6fb;
+  --bg: #f9fafb;
   --bg-2: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f4f6fb;
-  --fg: #171a23;
-  --fg-2: #3c4252;
-  --muted: #6b7280;
-  --faint: #9aa1af;
+  --panel-2: #f5f6f7;
+  --fg: #0f1115;
+  --fg-2: #434546;
+  --muted: #61666b;
+  --faint: #81858c;
 
-  --line: #e6e9f2;
-  --line-2: #eef1f7;
-  --line-strong: #d7dcec;
-  --sidebar-bg: #eef1f8;
+  --line: #ebeef2;
+  --line-2: #f1f3f5;
+  --line-strong: #e1e5ee;
+  --sidebar-bg: #f5f6f7;
 
   --ok: #16a06a;
   --ok-bg: rgba(22, 160, 106, 0.12);
@@ -47,26 +47,26 @@
 }
 
 :root[data-theme="dark"] {
-  --accent: #6c8bff;
-  --accent-strong: #7d98ff;
-  --accent-soft: #7d98ff;
-  --accent-bg: rgba(108, 139, 255, 0.15);
-  --accent-ring: rgba(108, 139, 255, 0.30);
+  --accent: #679efe;
+  --accent-strong: #93c5fd;
+  --accent-soft: #93c5fd;
+  --accent-bg: rgba(103, 158, 254, 0.15);
+  --accent-ring: rgba(103, 158, 254, 0.30);
   --nav-active-fg: #d7e2ff;
 
-  --bg: #0e1014;
-  --bg-2: #15181f;
-  --panel: #171b23;
-  --panel-2: #1d222d;
+  --bg: #0f1115;
+  --bg-2: #151517;
+  --panel: #151517;
+  --panel-2: #1b1b1c;
   --fg: #e7ebf2;
   --fg-2: #c3cad6;
   --muted: #979da6;
-  --faint: #7e848d;
+  --faint: #81858c;
 
-  --line: #262c39;
-  --line-2: #1e2430;
-  --line-strong: #30384a;
-  --sidebar-bg: #12151c;
+  --line: #2c2c2e;
+  --line-2: #232324;
+  --line-strong: #353638;
+  --sidebar-bg: #151517;
 
   --ok: #34c98e;
   --ok-bg: rgba(52, 201, 142, 0.14);
