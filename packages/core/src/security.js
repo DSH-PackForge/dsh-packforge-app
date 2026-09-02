@@ -34,6 +34,8 @@ const DENY_EXACT = new Set([
   '.credentials.yaml',
   '.anonymous-user-id',
   'settings.yaml',
+  // 导出工作区配置快照（本工具写入，不进包）
+  '.dshpkcfg',
 ]);
 
 /** 命中扩展名即排除（密钥/证书类） */

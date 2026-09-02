@@ -54,6 +54,12 @@ function registerIpc() {
       downloads: host.joinPath(home, 'Downloads'),
     };
   });
+  ipcMain.handle('cfg:load', async (_e, dir) => {
+    const raw = await host.readTextFile(host.joinPath(dir, '.dshpkcfg'));
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  });
+  ipcMain.handle('cfg:save', (_e, dir, config) => host.writeTextFile(host.joinPath(dir, '.dshpkcfg'), JSON.stringify(config, null, 2) + '\n'));
   ipcMain.handle('home:export', (_e, opts) => {
     // opts.home = { name, dir }；否则 opts.root = profiles 目录，向上推导 home。
     const dir = opts.home?.dir || (opts.root ? path.dirname(opts.root) : null);

@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('packforge', {
   inspectHome: (opts) => ipcRenderer.invoke('home:inspect', opts),
   exportHome: (opts) => ipcRenderer.invoke('home:export', opts),
   defaultDirs: () => ipcRenderer.invoke('host:defaultDirs'),
+  loadCfg: (dir) => ipcRenderer.invoke('cfg:load', dir),
+  saveCfg: (dir, config) => ipcRenderer.invoke('cfg:save', dir, config),
   installPack: (opts) => ipcRenderer.invoke('pack:install', opts),
   onInstallProgress: (cb) => ipcRenderer.on('pack:install-progress', (_e, p) => cb(p)),
   marketList: (source) => ipcRenderer.invoke('market:list', source),

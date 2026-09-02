@@ -281,6 +281,7 @@ async function doExport() {
       result.innerHTML = exportResultHTML(r);
       result.className = 'result ok';
       setStatus(`导出完成：${r.output}`, 'ok');
+      bridge.saveCfg(p.dir, exportCfg());
     }
   } catch (e) {
     result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
@@ -423,6 +424,7 @@ async function doExportHome() {
     result.innerHTML = exportResultHTML(r);
     result.className = 'result ok';
     setStatus(`导出完成：${r.output}`, 'ok');
+    bridge.saveCfg(h.dir, homeCfg());
   } catch (e) {
     result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
     result.className = 'result err';
@@ -508,6 +510,101 @@ function bindOutPreset(selId, inputId) {
   });
 }
 
+/* ---- 导出工作区配置持久化（.dshpkcfg） ---- */
+const cfgSet = (id, v) => { if (v != null && v !== '') $(id).value = v; };
+
+function exportCfg() {
+  return {
+    name: $('export-name').value.trim(),
+    version: $('export-version').value.trim(),
+    displayName: $('export-display').value.trim(),
+    description: $('export-desc').value.trim(),
+    author: $('export-author').value.trim(),
+    icon: $('export-icon').value.trim(),
+    profileName: $('export-profilename').value.trim(),
+    dshVersion: $('export-dsh').value,
+    mode: $('export-mode').value,
+    content: $('export-content').value,
+    out: $('export-out').value.trim(),
+    exportContent: {
+      skill: $('export-skill').checked,
+      preset: $('export-preset').checked,
+      instruction: $('export-instruction').checked,
+    },
+  };
+}
+
+function applyExportCfg(cfg) {
+  if (!cfg) return;
+  cfgSet('export-name', cfg.name);
+  cfgSet('export-version', cfg.version);
+  cfgSet('export-display', cfg.displayName);
+  cfgSet('export-desc', cfg.description);
+  cfgSet('export-author', cfg.author);
+  cfgSet('export-icon', cfg.icon);
+  cfgSet('export-profilename', cfg.profileName);
+  cfgSet('export-dsh', cfg.dshVersion);
+  cfgSet('export-mode', cfg.mode);
+  cfgSet('export-content', cfg.content);
+  cfgSet('export-out', cfg.out);
+  if (cfg.exportContent) {
+    $('export-skill').checked = cfg.exportContent.skill !== false;
+    $('export-preset').checked = cfg.exportContent.preset !== false;
+    $('export-instruction').checked = cfg.exportContent.instruction === true;
+  }
+}
+
+async function loadExportCfg() {
+  const p = currentProfile();
+  if (!p) return;
+  try { applyExportCfg(await bridge.loadCfg(p.dir)); } catch { /* 忽略 */ }
+}
+
+function homeCfg() {
+  return {
+    name: $('home-name').value.trim(),
+    version: $('home-version').value.trim(),
+    displayName: $('home-display').value.trim(),
+    description: $('home-desc').value.trim(),
+    author: $('home-author').value.trim(),
+    icon: $('home-icon').value.trim(),
+    defaultProfile: $('home-default-profile').value.trim(),
+    dshVersion: $('home-dsh').value,
+    out: $('home-out').value.trim(),
+    exportContent: {
+      skill: $('home-skill').checked,
+      preset: $('home-preset').checked,
+      instruction: $('home-instruction').checked,
+      data: $('home-data').checked,
+    },
+  };
+}
+
+function applyHomeCfg(cfg) {
+  if (!cfg) return;
+  cfgSet('home-name', cfg.name);
+  cfgSet('home-version', cfg.version);
+  cfgSet('home-display', cfg.displayName);
+  cfgSet('home-desc', cfg.description);
+  cfgSet('home-author', cfg.author);
+  cfgSet('home-icon', cfg.icon);
+  cfgSet('home-default-profile', cfg.defaultProfile);
+  cfgSet('home-dsh', cfg.dshVersion);
+  cfgSet('home-out', cfg.out);
+  if (cfg.exportContent) {
+    $('home-skill').checked = cfg.exportContent.skill !== false;
+    $('home-preset').checked = cfg.exportContent.preset !== false;
+    $('home-instruction').checked = cfg.exportContent.instruction !== false;
+    $('home-data').checked = cfg.exportContent.data !== false;
+  }
+}
+
+async function loadHomeCfg() {
+  const h = currentHome();
+  if (!h) return;
+  try { applyHomeCfg(await bridge.loadCfg(h.dir)); } catch { /* 忽略 */ }
+}
+
 /* ---- boot ---- */
 function init() {
   bindTabs();
@@ -527,7 +624,7 @@ function init() {
   $('pack-source').addEventListener('change', loadPackPreview);
   $('export-go').addEventListener('click', doExport);
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
-  $('export-profile').addEventListener('change', updatePreview);
+  $('export-profile').addEventListener('change', () => { loadExportCfg(); updatePreview(); });
   $('export-name').addEventListener('change', updatePreview);
   $('export-version').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
@@ -564,7 +661,7 @@ function init() {
   document.querySelectorAll('[data-export-tab]').forEach((btn) => {
     btn.addEventListener('click', () => switchExportTab(btn.dataset.exportTab));
   });
-  $('home-sel').addEventListener('change', updateHomePreview);
+  $('home-sel').addEventListener('change', () => { loadHomeCfg(); updateHomePreview(); });
   $('home-skill').addEventListener('change', updateHomePreview);
   $('home-preset').addEventListener('change', updateHomePreview);
   $('home-instruction').addEventListener('change', updateHomePreview);
