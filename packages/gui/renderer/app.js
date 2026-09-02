@@ -514,6 +514,14 @@ function init() {
   });
   $('import-go').addEventListener('click', doImport);
   $('import-home-go').addEventListener('click', doImportHome);
+  $('import-root-browse').addEventListener('click', async () => {
+    const d = await bridge.selectDir();
+    if (d) $('import-root').value = d;
+  });
+  $('import-home-browse').addEventListener('click', async () => {
+    const d = await bridge.selectDir();
+    if (d) $('import-home-target').value = d;
+  });
 
   // 导出页子 tab（Profile / DSH_HOME）
   document.querySelectorAll('[data-export-tab]').forEach((btn) => {
