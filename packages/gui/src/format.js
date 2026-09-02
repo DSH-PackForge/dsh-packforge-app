@@ -139,13 +139,12 @@ export function marketCardHTML(p) {
       <span class="muted">${escapeHtml(p.name)} · v${escapeHtml(String(p.version))}</span>
     </header>
     <p class="card-desc">${escapeHtml(p.description) || '<span class="muted">无描述</span>'}</p>
-    <div class="meta">
+    <div class="card-tags">
       <span class="pill">${fmt}</span>
-      ${p.dshVersion ? `<span>dsh ${escapeHtml(p.dshVersion)}</span>` : ''}
-      ${p.author ? `<span>by ${escapeHtml(p.author)}</span>` : ''}
-      ${p.size ? `<span>${formatBytes(p.size)}</span>` : ''}
+      ${p.dshVersion ? `<span class="tag">dsh ${escapeHtml(p.dshVersion)}</span>` : ''}
+      ${p.author ? `<span class="tag">by ${escapeHtml(p.author)}</span>` : ''}
+      ${p.size ? `<span class="tag">${formatBytes(p.size)}</span>` : ''}
     </div>
-    ${p.sha256 ? `<div class="muted mono">${shortSha(p.sha256)}</div>` : ''}
     <div class="card-actions">${action}</div>
   </article>`;
 }
