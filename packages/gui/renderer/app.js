@@ -635,6 +635,23 @@ function init() {
     const p = await bridge.selectFile([{ name: '市场索引', extensions: ['json'] }]);
     if (p) refreshMarket(p);
   });
+
+  // 市场「更多」下拉菜单：点触发器开合，点条目/点外部关闭
+  const marketMenu = $('market-menu');
+  const marketMenuBtn = $('market-menu-btn');
+  const closeMarketMenu = () => {
+    marketMenu.hidden = true;
+    marketMenuBtn.setAttribute('aria-expanded', 'false');
+  };
+  marketMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = marketMenu.hidden;
+    marketMenu.hidden = !open;
+    marketMenuBtn.setAttribute('aria-expanded', String(open));
+  });
+  marketMenu.addEventListener('click', (e) => { e.stopPropagation(); closeMarketMenu(); });
+  document.addEventListener('click', closeMarketMenu);
+
   $('market-out').addEventListener('click', (e) => {
     const btn = e.target.closest('.card-install');
     if (btn) installFromMarket(btn);

@@ -322,6 +322,29 @@ input[type="checkbox"]:focus-visible { outline: 2px solid var(--dsw-brand-primar
 h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--dsw-label-tertiary); letter-spacing: 0.02em; }
 h3:first-child { margin-top: 0; }
 
+/* ---------- 市场：下拉菜单 ---------- */
+.menu-wrap { position: relative; }
+.menu-wrap > .ghost { display: inline-flex; align-items: center; gap: 6px; }
+.menu-wrap > .ghost svg { width: 15px; height: 15px; }
+.menu {
+  position: absolute; z-index: 50; top: calc(100% + 6px); right: 0;
+  display: grid; min-width: 180px; padding: 5px;
+  border: 1px solid var(--dsw-border-l1); border-radius: var(--r-card);
+  background: var(--dsw-bg-layer-1);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 28%, transparent);
+}
+.menu-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; min-height: 32px; padding: 5px 9px;
+  border: 0; border-radius: 7px; background: transparent;
+  color: var(--dsw-label-primary); font: inherit; font-size: 12.5px;
+  text-align: left; cursor: pointer;
+  transition: background var(--ds-duration-fast) var(--ds-ease);
+}
+.menu-item:hover { background: var(--dsw-interactive-hover); }
+.menu-item:focus-visible { outline: 2px solid var(--dsw-brand-primary); outline-offset: 1px; }
+.menu-item svg { width: 15px; height: 15px; stroke-width: 1.8; flex: none; }
+
 /* ---------- 市场：卡片网格 ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(286px, 1fr)); gap: 16px; }
 .card {
@@ -412,7 +435,15 @@ h3:first-child { margin-top: 0; }
 .pre-file { margin-top: 12px; color: var(--dsw-label-tertiary); }
 
 /* ---------- 市场空态 ---------- */
-.market-empty { grid-column: 1 / -1; padding: 26px; text-align: center; }
+.market-empty { grid-column: 1 / -1; padding: 44px 26px; text-align: center; }
+.market-empty::before {
+  content: 'D'; display: grid; place-items: center;
+  width: 56px; height: 56px; margin: 0 auto 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #6c8bff 0%, #4d6bfe 55%, #3b55d9 100%);
+  color: #fff; font-size: 28px; font-weight: 700;
+  box-shadow: 0 12px 28px rgba(77, 107, 254, 0.28);
+}
 .market-empty p { margin: 4px 0; }
 
 /* ---------- 结果条 ---------- */
