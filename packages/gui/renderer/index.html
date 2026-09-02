@@ -19,17 +19,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
           <span>市场</span>
         </button>
-        <button data-tab="import">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7.5 8.5 4.5 4.5 4.5-4.5"/></svg>
-          <span>导入</span>
+        <button data-tab="pack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3.3 7.8 12 12.7l8.7-4.9"/><path d="M12 12.7V21"/></svg>
+          <span>整合包</span>
         </button>
         <button data-tab="export">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/></svg>
           <span>导出</span>
-        </button>
-        <button data-tab="view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>
-          <span>查看整合包</span>
         </button>
       </nav>
 
@@ -256,75 +252,64 @@
           </div><!-- /export-home-view -->
         </section>
 
-        <!-- 导入 -->
-        <section id="pane-import" class="pane" hidden>
+        <!-- 整合包（查看 + 导入） -->
+        <section id="pane-pack" class="pane" hidden>
           <div class="pane-head">
             <div>
-              <h1>导入</h1>
-              <p class="sub">安装 .dspack 整合包</p>
+              <h1>整合包</h1>
+              <p class="sub">打开 .dspack 查看内容并安装</p>
             </div>
+          </div>
+
+          <!-- 文件选择 -->
+          <div class="panel form">
+            <div class="field">
+              <label for="pack-source">整合包</label>
+              <div class="row">
+                <input id="pack-source" placeholder="本地 .dspack 路径或 URL" />
+                <button id="pack-browse" class="ghost">浏览…</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 包预览（选完文件后自动加载） -->
+          <div id="pack-preview" class="panel" hidden>
+            <div id="pack-preview-out"></div>
+          </div>
+
+          <!-- 安装区 -->
+          <div id="pack-install" hidden>
             <div class="sub-tabs">
-              <button data-import-tab="profile" class="active">导入 Profile</button>
-              <button data-import-tab="home">导入 DSH_HOME</button>
+              <button data-install-tab="profile" class="active">导入 Profile</button>
+              <button data-install-tab="home">导入 DSH_HOME</button>
             </div>
-          </div>
-
-          <!-- Profile 导入子视图 -->
-          <div id="import-profile-view">
-            <div class="panel form">
-              <div class="field">
-                <label for="import-source">整合包</label>
-                <div class="row">
-                  <input id="import-source" placeholder="本地 .dspack 路径或 URL" />
-                  <button id="import-browse" class="ghost">浏览…</button>
+            <div id="install-profile-view">
+              <div class="panel form">
+                <div class="field">
+                  <label for="import-name">安装名（覆盖 manifest）</label>
+                  <input id="import-name" placeholder="可选" />
                 </div>
-              </div>
-              <div class="field">
-                <label for="import-name">安装名（覆盖 manifest）</label>
-                <input id="import-name" placeholder="可选" />
-              </div>
-              <div class="field">
-                <label for="import-root">目标根</label>
-                <input id="import-root" placeholder="默认 ~/.dsh/profiles" />
-              </div>
-              <label class="field check"><span><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</span></label>
-              <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
-            </div>
-            <pre id="import-out" class="result"></pre>
-          </div>
-
-          <!-- DSH_HOME 导入子视图 -->
-          <div id="import-home-view" hidden>
-            <div class="panel form">
-              <div class="field">
-                <label for="import-home-source">整合包</label>
-                <div class="row">
-                  <input id="import-home-source" placeholder="本地 .dspack 路径或 URL" />
-                  <button id="import-home-browse" class="ghost">浏览…</button>
+                <div class="field">
+                  <label for="import-root">目标根</label>
+                  <input id="import-root" placeholder="默认 ~/.dsh/profiles" />
                 </div>
+                <label class="field check"><span><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</span></label>
+                <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
               </div>
-              <div class="field">
-                <label for="import-home-target">目标 DSH_HOME</label>
-                <input id="import-home-target" placeholder="默认 ~/.dsh" />
+              <pre id="import-out" class="result"></pre>
+            </div>
+            <div id="install-home-view" hidden>
+              <div class="panel form">
+                <div class="field">
+                  <label for="import-home-target">目标 DSH_HOME</label>
+                  <input id="import-home-target" placeholder="默认 ~/.dsh" />
+                </div>
+                <label class="field check"><span><input type="checkbox" id="import-home-dry" /> 仅预览（dry-run）</span></label>
+                <div class="toolbar"><button id="import-home-go" class="primary">安装</button></div>
               </div>
-              <label class="field check"><span><input type="checkbox" id="import-home-dry" /> 仅预览（dry-run）</span></label>
-              <div class="toolbar"><button id="import-home-go" class="primary">安装</button></div>
+              <pre id="import-home-out" class="result"></pre>
             </div>
-            <pre id="import-home-out" class="result"></pre>
           </div>
-        </section>
-
-        <!-- 查看整合包 -->
-        <section id="pane-view" class="pane" hidden>
-          <div class="pane-head">
-            <div>
-              <h1>查看整合包</h1>
-              <p class="sub">打开 .dspack，查看结构与校验结果</p>
-            </div>
-            <button id="view-open" class="primary">选择 .dspack…</button>
-          </div>
-          <span id="view-path" class="view-path mono"></span>
-          <div class="panel"><div id="view-out"></div></div>
         </section>
       </main>
 

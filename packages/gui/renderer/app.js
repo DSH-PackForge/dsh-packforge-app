@@ -58,30 +58,32 @@ async function refreshMarket(source) {
 async function installFromMarket(btn) {
   const source = btn.dataset.url;
   if (!source) return setStatus('该条目无下载地址', 'err');
-  setStatus('安装中：' + source, '');
-  try {
-    const size = Number(btn.dataset.size);
-    const r = await bridge.installPack({
-      source,
-      expectedSha256: btn.dataset.sha || undefined,
-      expectedSize: Number.isInteger(size) && size > 0 ? size : undefined,
-    });
-    setStatus(`已安装：${r.profileName} → ${r.dir}`, 'ok');
-  } catch (e) {
-    setStatus('安装失败：' + e.message, 'err');
-  }
+  switchTab('pack');
+  $('pack-source').value = source;
+  loadPackPreview();
 }
 
-/* ---- 查看整合包 ---- */
-async function openPackView() {
-  const path = await bridge.selectFile([{ name: 'DSH 整合包', extensions: ['dspack'] }]);
-  if (!path) return;
-  $('view-path').textContent = path;
+/* ---- 整合包：预览 + 安装 ---- */
+async function loadPackPreview() {
+  const source = $('pack-source').value.trim();
+  const preview = $('pack-preview');
+  const install = $('pack-install');
+  if (!source) {
+    preview.hidden = true;
+    $('pack-preview-out').innerHTML = '';
+    install.hidden = true;
+    return;
+  }
+  preview.hidden = false;
+  $('pack-preview-out').innerHTML = '<p class="muted">解析中…</p>';
   try {
-    $('view-out').innerHTML = packViewHTML(await bridge.viewPack(path));
-    setStatus('已查看：' + path, 'ok');
+    const r = await bridge.viewPack(source);
+    $('pack-preview-out').innerHTML = packViewHTML(r);
+    install.hidden = false;
+    setStatus('已解析整合包', 'ok');
   } catch (e) {
-    $('view-out').innerHTML = `<p class="err">${escape(e.message)}</p>`;
+    $('pack-preview-out').innerHTML = `<p class="err">${escape(e.message)}</p>`;
+    install.hidden = true;
     setStatus(e.message, 'err');
   }
 }
@@ -422,8 +424,8 @@ async function doExportHome() {
 
 /* ---- 导入 ---- */
 async function doImport() {
-  const source = $('import-source').value.trim();
-  if (!source) return setStatus('请填写整合包路径或 URL', 'err');
+  const source = $('pack-source').value.trim();
+  if (!source) return setStatus('请先选择整合包文件', 'err');
   const opts = {
     source,
     name: $('import-name').value || undefined,
@@ -443,15 +445,15 @@ async function doImport() {
   }
 }
 
-function switchImportTab(tab) {
-  document.querySelectorAll('[data-import-tab]').forEach((b) => b.classList.toggle('active', b.dataset.importTab === tab));
-  $('import-profile-view').hidden = tab !== 'profile';
-  $('import-home-view').hidden = tab !== 'home';
+function switchInstallTab(tab) {
+  document.querySelectorAll('[data-install-tab]').forEach((b) => b.classList.toggle('active', b.dataset.installTab === tab));
+  $('install-profile-view').hidden = tab !== 'profile';
+  $('install-home-view').hidden = tab !== 'home';
 }
 
 async function doImportHome() {
-  const source = $('import-home-source').value.trim();
-  if (!source) return setStatus('请填写整合包路径或 URL', 'err');
+  const source = $('pack-source').value.trim();
+  if (!source) return setStatus('请先选择整合包文件', 'err');
   const opts = {
     source,
     home: $('import-home-target').value || undefined,
@@ -492,7 +494,11 @@ function init() {
     const btn = e.target.closest('.card-install');
     if (btn) installFromMarket(btn);
   });
-  $('view-open').addEventListener('click', openPackView);
+  $('pack-browse').addEventListener('click', async () => {
+    const p = await bridge.selectFile([{ name: 'DSH 整合包', extensions: ['dspack'] }]);
+    if (p) { $('pack-source').value = p; loadPackPreview(); }
+  });
+  $('pack-source').addEventListener('change', loadPackPreview);
   $('export-go').addEventListener('click', doExport);
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
   $('export-profile').addEventListener('change', updatePreview);
@@ -513,21 +519,13 @@ function init() {
     const d = await bridge.selectDir();
     if (d) $('export-out').value = d;
   });
-  $('import-browse').addEventListener('click', async () => {
-    const p = await bridge.selectFile([{ name: 'DSH 整合包', extensions: ['dspack'] }]);
-    if (p) $('import-source').value = p;
-  });
   $('import-go').addEventListener('click', doImport);
-
-  // 导入页子 tab（Profile / DSH_HOME）
-  document.querySelectorAll('[data-import-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => switchImportTab(btn.dataset.importTab));
-  });
-  $('import-home-browse').addEventListener('click', async () => {
-    const p = await bridge.selectFile([{ name: 'DSH 整合包', extensions: ['dspack'] }]);
-    if (p) $('import-home-source').value = p;
-  });
   $('import-home-go').addEventListener('click', doImportHome);
+
+  // 安装区子 tab（导入 Profile / 导入 DSH_HOME）
+  document.querySelectorAll('[data-install-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => switchInstallTab(btn.dataset.installTab));
+  });
 
   // 导出页子 tab（Profile / DSH_HOME）
   document.querySelectorAll('[data-export-tab]').forEach((btn) => {
@@ -546,7 +544,7 @@ function init() {
     const label = INSTALL_STAGES[p?.stage] ?? p?.detail ?? p?.stage ?? '';
     if (!label) return;
     setStatus(`正在安装… ${label}`, '');
-    if (!$('pane-import').hidden) $('import-out').textContent = `⏳ ${label}`;
+    if (!$('pane-pack').hidden) $('import-out').textContent = `⏳ ${label}`;
   });
 
   if (!bridge) {
@@ -556,8 +554,9 @@ function init() {
   // 注册 URL 协议导入：dspack://install?url=<http(s)://…>
   bridge.onProtocolUrl?.((url) => {
     if (!url) return;
-    switchTab('import');
-    $('import-source').value = url;
+    switchTab('pack');
+    $('pack-source').value = url;
+    loadPackPreview();
     setStatus('收到整合包链接（dspack://），确认后点「安装」', 'ok');
   });
   refreshMarket();
