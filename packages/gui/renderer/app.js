@@ -88,6 +88,10 @@ async function loadPackPreview() {
     const r = await bridge.viewPack(source);
     $('pack-preview-out').innerHTML = packViewHTML(r);
     install.hidden = false;
+    // 按解析出的 type 自动显示对应安装字段（无需手选 Profile / DSH_HOME）
+    const isHome = r.manifest?.type === 'dshhome';
+    $('install-profile-view').hidden = isHome;
+    $('install-home-view').hidden = !isHome;
     setStatus('已解析整合包', 'ok');
   } catch (e) {
     $('pack-preview-out').innerHTML = `<p class="err">${escape(e.message)}</p>`;
@@ -436,12 +440,6 @@ async function doImport() {
   }
 }
 
-function switchInstallTab(tab) {
-  document.querySelectorAll('[data-install-tab]').forEach((b) => b.classList.toggle('active', b.dataset.installTab === tab));
-  $('install-profile-view').hidden = tab !== 'profile';
-  $('install-home-view').hidden = tab !== 'home';
-}
-
 async function doImportHome() {
   const source = $('pack-source').value.trim();
   if (!source) return setStatus('请先选择整合包文件', 'err');
@@ -516,11 +514,6 @@ function init() {
   });
   $('import-go').addEventListener('click', doImport);
   $('import-home-go').addEventListener('click', doImportHome);
-
-  // 安装区子 tab（导入 Profile / 导入 DSH_HOME）
-  document.querySelectorAll('[data-install-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => switchInstallTab(btn.dataset.installTab));
-  });
 
   // 导出页子 tab（Profile / DSH_HOME）
   document.querySelectorAll('[data-export-tab]').forEach((btn) => {
