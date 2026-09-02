@@ -12,6 +12,7 @@ import {
   installPack,
   resolvePackSource,
   readMarketIndex,
+  fetchMarketPackDetail,
   DEFAULT_MARKET_INDEX,
 } from '@dsh-packforge/core';
 
@@ -54,6 +55,7 @@ view 选项:
 
 market 选项:
   --json                  以 JSON 输出市场条目（默认官方远端，可用位置参数或 $env:DSHPACK_MARKET_INDEX 覆盖）
+  --detail <name|id>     懒加载某个整合包的完整 manifest + README（来自 packs/<owner>.<repo>/）
 
 install 选项:
   --name <slug>           安装后的 Profile 目录名（默认取 manifest）
@@ -77,6 +79,7 @@ install 选项:
   dspack install ./web-1.0.0.dspack
   dspack install https://example.com/web-1.0.0.dspack --registry https://registry.npmmirror.com
   dspack market ./market/index.json
+  dspack market --detail all-about-whales
 `;
 
 export async function main(argv) {
@@ -366,10 +369,51 @@ async function runView(host, args) {
 }
 
 async function runMarket(host, args) {
-  const { values, positionals } = parse({ json: { type: 'boolean' } }, args);
+  const { values, positionals } = parse(
+    { json: { type: 'boolean' }, detail: { type: 'string' } },
+    args,
+  );
   const indexPath = positionals[0] || host.env('DSHPACK_MARKET_INDEX') || DEFAULT_MARKET_INDEX;
 
   const { packs } = await readMarketIndex(host, indexPath);
+
+  // market --detail <name|id>：懒加载完整 manifest + README 并打印
+  if (values.detail) {
+    const target = String(values.detail);
+    const p = packs.find((x) => x.name === target || x.id === target);
+    if (!p) return error(`市场索引中未找到「${target}」`);
+    log(`懒加载详情：${p.name}  (${p.id || '无 id'})`);
+    const { manifest, readme } = await fetchMarketPackDetail(host, indexPath, p);
+    if (!manifest) {
+      log('  （完整 manifest 拉取失败，以下为索引摘要）');
+      log(`  展示名 : ${p.displayName}`);
+      log(`  版本   : ${p.version}  (manifest v${p.manifestVersion})`);
+      log(`  下载   : ${p.downloadUrl}`);
+      return;
+    }
+    log(`  展示名 : ${renderLocale(manifest.displayName) || p.displayName}`);
+    log(`  类型   : ${manifest.type || 'profile'}`);
+    log(`  版本   : ${manifest.version}  (manifest v${manifest.manifestVersion ?? p.manifestVersion})`);
+    log(`  dsh    : ${manifest.dshVersion || '（未钉定）'}`);
+    if (manifest.type === 'dshhome') {
+      const names = Object.keys(manifest.profiles ?? {});
+      log(`  profile: ${names.length} 个${manifest.defaultProfile ? `（默认 ${manifest.defaultProfile}）` : ''}`);
+      for (const n of names) {
+        const u = manifest.profiles[n] || {};
+        log(`    - ${n}: ${(u.bundles ?? []).length} bundles / ${Object.keys(u.dependencies ?? {}).length} deps`);
+      }
+      if (Object.keys(manifest.presets ?? {}).length) log(`  presets: ${Object.keys(manifest.presets).join(', ')}`);
+      if ((manifest.skills ?? []).length) log(`  skills : ${manifest.skills.map((s) => s.path ?? s).join(', ')}`);
+      if (manifest.instructions) log(`  指令   : ${manifest.instructions}`);
+    } else {
+      log(`  层栈   : ${(manifest.bundles ?? []).join(', ') || '（无）'}`);
+      log(`  依赖   : ${Object.keys(manifest.dependencies ?? {}).join(', ') || '（无）'}`);
+      log(`  重内容 : ${(manifest.files ?? []).length} 个 files[] 条目`);
+    }
+    if (readme) log(`  README : ${readme.split('\n').length} 行（已拉取）`);
+    return;
+  }
+
   if (values.json) {
     log(JSON.stringify({ packs }, null, 2));
     return;
