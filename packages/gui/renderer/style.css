@@ -234,6 +234,7 @@ main { flex: 1; overflow: auto; padding: 30px 34px 36px; }
   color: var(--dsw-label-secondary); font-size: 13px; cursor: pointer;
   transition: background var(--ds-duration-fast) var(--ds-ease), color var(--ds-duration-fast) var(--ds-ease);
 }
+.sub-tabs button:hover { color: var(--dsw-label-primary); }
 .sub-tabs button.active { background: var(--dsw-bg-layer-1); color: var(--dsw-label-primary); box-shadow: 0 1px 2px var(--dsw-border-l2); }
 
 /* ---------- 按钮 ---------- */
@@ -282,7 +283,27 @@ select { padding-right: 32px; appearance: none; cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 11px center; }
 textarea { resize: vertical; min-height: 62px; line-height: 1.55; }
-input[type="checkbox"] { width: 16px; height: 16px; padding: 0; accent-color: var(--dsw-brand-primary); cursor: pointer; flex: none; }
+/* 开关：原生 checkbox 伪装为 DSH 胶囊开关（40×22 轨道 + 18px 圆点） */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 40px; height: 22px; padding: 0;
+  border: none; border-radius: var(--r-pill); flex: none;
+  position: relative;
+  background: color-mix(in srgb, var(--dsw-label-quaternary) 40%, transparent);
+  cursor: pointer;
+  transition: background-color var(--ds-duration-fast) var(--ds-ease);
+}
+input[type="checkbox"]::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+  transition: transform var(--ds-duration-fast) var(--ds-ease);
+}
+input[type="checkbox"]:checked { background: var(--dsw-brand-primary); }
+input[type="checkbox"]:checked::after { transform: translateX(18px); }
+input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--dsw-brand-primary); outline-offset: 2px; }
 
 /* ---------- 通用工具类 ---------- */
 .muted { color: var(--dsw-label-tertiary); }
@@ -309,7 +330,7 @@ h3:first-child { margin-top: 0; }
   padding: 18px; box-shadow: var(--shadow-1);
   transition: border-color var(--ds-duration-slow) var(--ds-ease), box-shadow var(--ds-duration-slow) var(--ds-ease), transform var(--ds-duration-slow) var(--ds-ease);
 }
-.card:hover { border-color: var(--dsw-border-l1); box-shadow: var(--shadow-2); transform: translateY(-3px); }
+.card:hover { border-color: color-mix(in srgb, var(--dsw-brand-primary) 45%, transparent); box-shadow: var(--shadow-2); }
 .card.stale { opacity: 0.62; }
 .card header { display: flex; flex-direction: column; gap: 3px; }
 .card h3 { margin: 0; font-size: 16px; font-weight: 650; color: var(--dsw-label-primary); letter-spacing: -0.01em; }
@@ -354,8 +375,8 @@ h3:first-child { margin-top: 0; }
 .form { display: flex; flex-direction: column; gap: 18px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > label { font-size: 12.5px; color: var(--dsw-label-tertiary); font-weight: 550; letter-spacing: 0.02em; }
-.check { flex-direction: row; align-items: center; gap: 8px; color: var(--dsw-label-secondary); cursor: pointer; }
-.check input { width: auto; }
+.check { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; color: var(--dsw-label-secondary); cursor: pointer; }
+.check input { flex: none; }
 .toolbar { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
 .toolbar .muted { font-size: 12.5px; }
 
