@@ -281,7 +281,6 @@ async function doExport() {
       result.innerHTML = exportResultHTML(r);
       result.className = 'result ok';
       setStatus(`导出完成：${r.output}`, 'ok');
-      bridge.saveCfg(p.dir, exportCfg());
     }
   } catch (e) {
     result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
@@ -424,7 +423,6 @@ async function doExportHome() {
     result.innerHTML = exportResultHTML(r);
     result.className = 'result ok';
     setStatus(`导出完成：${r.output}`, 'ok');
-    bridge.saveCfg(h.dir, homeCfg());
   } catch (e) {
     result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
     result.className = 'result err';
@@ -605,6 +603,30 @@ async function loadHomeCfg() {
   try { applyHomeCfg(await bridge.loadCfg(h.dir)); } catch { /* 忽略 */ }
 }
 
+function saveExportCfg() {
+  const p = currentProfile();
+  if (!p) return setStatus('未选择 Profile', 'err');
+  bridge.saveCfg(p.dir, exportCfg());
+  setStatus('已保存配置', 'ok');
+}
+
+function saveHomeCfg() {
+  const h = currentHome();
+  if (!h) return setStatus('未选择 DSH_HOME', 'err');
+  bridge.saveCfg(h.dir, homeCfg());
+  setStatus('已保存配置', 'ok');
+}
+
+async function saveAndExport() {
+  saveExportCfg();
+  await doExport();
+}
+
+async function saveAndExportHome() {
+  saveHomeCfg();
+  await doExportHome();
+}
+
 /* ---- boot ---- */
 function init() {
   bindTabs();
@@ -623,6 +645,8 @@ function init() {
   });
   $('pack-source').addEventListener('change', loadPackPreview);
   $('export-go').addEventListener('click', doExport);
+  $('export-save').addEventListener('click', saveExportCfg);
+  $('export-save-go').addEventListener('click', saveAndExport);
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
   $('export-profile').addEventListener('change', () => { loadExportCfg(); updatePreview(); });
   $('export-name').addEventListener('change', updatePreview);
@@ -668,6 +692,8 @@ function init() {
   $('home-data').addEventListener('change', updateHomePreview);
   $('home-refresh').addEventListener('click', initExportHome);
   $('home-go').addEventListener('click', doExportHome);
+  $('home-save').addEventListener('click', saveHomeCfg);
+  $('home-save-go').addEventListener('click', saveAndExportHome);
   $('home-browse').addEventListener('click', async () => {
     const d = await bridge.selectDir();
     if (d) $('home-out').value = d;
