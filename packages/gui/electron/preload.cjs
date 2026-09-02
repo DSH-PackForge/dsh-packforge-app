@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('packforge', {
   listHomes: () => ipcRenderer.invoke('home:list'),
   inspectHome: (opts) => ipcRenderer.invoke('home:inspect', opts),
   exportHome: (opts) => ipcRenderer.invoke('home:export', opts),
+  defaultDirs: () => ipcRenderer.invoke('host:defaultDirs'),
   installPack: (opts) => ipcRenderer.invoke('pack:install', opts),
   onInstallProgress: (cb) => ipcRenderer.on('pack:install-progress', (_e, p) => cb(p)),
   marketList: (source) => ipcRenderer.invoke('market:list', source),

@@ -176,18 +176,28 @@ function exportOpts() {
 let homeCats = { skills: [], presets: [], instructions: [], other: [] };
 
 function categorizeHomeFiles(files) {
-  const skills = [];
-  const presets = [];
+  const skills = new Map();    // name -> rels[]（每个 skill 一个条目，目录型 skill 的资源文件归并）
+  const presets = new Map();   // id -> rels[]
   const instructions = [];
   const other = [];
   for (const f of files ?? []) {
     const rel = String(f.rel || '');
-    if (rel.startsWith('skills/')) skills.push(f);
-    else if (rel.startsWith('.agent-presets/')) presets.push(f);
-    else if (rel === 'AGENTS.md') instructions.push(f);
-    else other.push(f);
+    const seg = rel.split('/');
+    if (seg[0] === 'skills' && seg.length >= 2) {
+      const name = seg.length === 2 && seg[1].endsWith('.md') ? seg[1].slice(0, -3) : seg[1];
+      if (!skills.has(name)) skills.set(name, []);
+      skills.get(name).push(rel);
+    } else if (seg[0] === '.agent-presets' && seg.length >= 2) {
+      const id = seg[1];
+      if (!presets.has(id)) presets.set(id, []);
+      presets.get(id).push(rel);
+    } else if (rel === 'AGENTS.md') {
+      instructions.push(rel);
+    } else {
+      other.push(rel);
+    }
   }
-  return { skills, presets, instructions, other };
+  return { skills: [...skills.values()], presets: [...presets.values()], instructions, other };
 }
 
 function renderHomeContentSwitches() {
@@ -200,9 +210,9 @@ function renderHomeContentSwitches() {
 
 function homeIncludeFromSwitches() {
   const rels = [];
-  if ($('export-skill').checked) for (const f of homeCats.skills) rels.push(f.rel);
-  if ($('export-preset').checked) for (const f of homeCats.presets) rels.push(f.rel);
-  if ($('export-instruction').checked) for (const f of homeCats.instructions) rels.push(f.rel);
+  if ($('export-skill').checked) for (const rs of homeCats.skills) rels.push(...rs);
+  if ($('export-preset').checked) for (const rs of homeCats.presets) rels.push(...rs);
+  if ($('export-instruction').checked) rels.push(...homeCats.instructions);
   return rels.length ? rels : undefined;
 }
 
@@ -318,18 +328,28 @@ function currentHome() {
 let homeContent = { skills: [], presets: [], instructions: [], data: [] };
 
 function categorizeHomeContent(files) {
-  const skills = [];
-  const presets = [];
+  const skills = new Map();    // name -> rels[]（每个 skill 一个条目）
+  const presets = new Map();   // id -> rels[]
   const instructions = [];
   const data = [];
   for (const f of files ?? []) {
     const rel = String(f.rel || '');
-    if (rel.startsWith('skills/')) skills.push(f);
-    else if (rel.startsWith('.agent-presets/')) presets.push(f);
-    else if (rel === 'AGENTS.md') instructions.push(f);
-    else if (rel.startsWith('data/')) data.push(f);
+    const seg = rel.split('/');
+    if (seg[0] === 'skills' && seg.length >= 2) {
+      const name = seg.length === 2 && seg[1].endsWith('.md') ? seg[1].slice(0, -3) : seg[1];
+      if (!skills.has(name)) skills.set(name, []);
+      skills.get(name).push(rel);
+    } else if (seg[0] === '.agent-presets' && seg.length >= 2) {
+      const id = seg[1];
+      if (!presets.has(id)) presets.set(id, []);
+      presets.get(id).push(rel);
+    } else if (rel === 'AGENTS.md') {
+      instructions.push(rel);
+    } else if (rel.startsWith('data/')) {
+      data.push(rel);
+    }
   }
-  return { skills, presets, instructions, data };
+  return { skills: [...skills.values()], presets: [...presets.values()], instructions, data };
 }
 
 function renderHomeSwitches() {
@@ -474,6 +494,20 @@ function escape(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+/* 输出目录快捷预设（桌面 / 下载 / 主目录） */
+let defaultDirs = { home: '', desktop: '', downloads: '' };
+
+async function loadDefaultDirs() {
+  try { defaultDirs = await bridge.defaultDirs(); } catch { /* 忽略 */ }
+}
+
+function bindOutPreset(selId, inputId) {
+  $(selId).addEventListener('change', () => {
+    const v = $(selId).value;
+    if (v && defaultDirs[v]) $(inputId).value = defaultDirs[v];
+  });
+}
+
 /* ---- boot ---- */
 function init() {
   bindTabs();
@@ -512,6 +546,9 @@ function init() {
     const d = await bridge.selectDir();
     if (d) $('export-out').value = d;
   });
+  loadDefaultDirs();
+  bindOutPreset('export-out-preset', 'export-out');
+  bindOutPreset('home-out-preset', 'home-out');
   $('import-go').addEventListener('click', doImport);
   $('import-home-go').addEventListener('click', doImportHome);
   $('import-root-browse').addEventListener('click', async () => {
