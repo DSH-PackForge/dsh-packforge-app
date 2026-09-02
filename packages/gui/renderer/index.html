@@ -5,8 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DSH PackForge</title>
   <link rel="stylesheet" href="./style.css" />
+  <script>
+    // 越早越好：先于首帧把平台 / 材质写到 <html>，供标题栏与 Mica 玻璃样式生效。
+    (function () {
+      var root = document.documentElement;
+      var bridge = window.packforge;
+      var plat = (bridge && bridge.platform) || navigator.platform || '';
+      var platform = /Mac/i.test(plat) ? 'darwin' : /Win/i.test(plat) ? 'win32' : 'linux';
+      var material = new URLSearchParams(location.search).get('material') || 'off';
+      root.setAttribute('data-platform', platform);
+      root.setAttribute('data-material', material);
+    })();
+  </script>
 </head>
 <body>
+  <header class="titlebar">
+    <div class="titlebar-identity">
+      <span class="titlebar-mark">D</span>
+      <span class="titlebar-product">DSH PackForge</span>
+      <span class="titlebar-version" id="titlebar-version">v0.1.0</span>
+    </div>
+  </header>
+
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
@@ -314,6 +334,11 @@
   <script>
     (function () {
       var root = document.documentElement;
+      var appVersion = new URLSearchParams(location.search).get('version');
+      if (appVersion) {
+        var verEl = document.getElementById('titlebar-version');
+        if (verEl) verEl.textContent = 'v' + appVersion;
+      }
       var KEY = 'dsh-packforge-theme';
       var saved = null;
       try { saved = localStorage.getItem(KEY); } catch (e) {}

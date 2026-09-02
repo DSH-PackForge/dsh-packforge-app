@@ -2,6 +2,7 @@
 // 职责：注册 IPC；注册 dspack:// URL 协议实现「链接一键导入」；把渲染进程调用转发给 core + NodeHost。
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -121,18 +122,61 @@ function sendProtocolUrl(target) {
   }
 }
 
+/** Windows 材质：Win11 build ≥ 22621 才支持 Mica（系统背景染色模糊）。 */
+function resolveWindowsMaterial() {
+  if (process.platform !== 'win32') return 'off';
+  const m = /^(\d+\.){2}(\d+)/.exec(os.release());
+  const build = m ? Number(m[1]) : 0;
+  return Number.isSafeInteger(build) && build >= 22621 ? 'mica' : 'off';
+}
+
+/**
+ * 自定义标题栏 chrome（对齐 DSH Desktop）：
+ * - Windows：titleBarStyle hidden + titleBarOverlay 保留原生窗口按钮，Mica 时透明底色透出材质。
+ * - macOS：hiddenInset + 交通灯定位；transparent 时走系统 vibrancy 玻璃。
+ * - 其它平台：返回默认原生边框。
+ */
+function windowChrome(platform, material) {
+  if (platform === 'darwin') {
+    return {
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 16, y: 12 },
+      ...(material === 'transparent'
+        ? { transparent: true, backgroundColor: '#00000000', vibrancy: 'sidebar', visualEffectState: 'followWindow' }
+        : {}),
+    };
+  }
+  if (platform === 'win32') {
+    return {
+      autoHideMenuBar: true,
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: '#00000000', symbolColor: '#7f858f', height: 36 },
+      ...(material === 'mica' ? { backgroundColor: '#00000000', backgroundMaterial: 'mica' } : {}),
+      hasShadow: true,
+      roundedCorners: true,
+      thickFrame: true,
+    };
+  }
+  return {};
+}
+
 function createWindow() {
+  const platform = process.platform;
+  const material = platform === 'darwin' ? 'transparent' : resolveWindowsMaterial();
   win = new BrowserWindow({
     width: 1120,
     height: 760,
     title: 'DSH PackForge',
+    ...windowChrome(platform, material),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
+    query: { material, version: app.getVersion() },
+  });
   win.on('closed', () => { win = null; });
   win.webContents.on('did-finish-load', () => {
     if (pendingDspack) {

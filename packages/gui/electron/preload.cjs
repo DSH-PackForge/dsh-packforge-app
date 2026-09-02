@@ -2,6 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('packforge', {
+  platform: process.platform,
   selectFile: (filters) => ipcRenderer.invoke('dialog:selectFile', filters),
   selectDir: () => ipcRenderer.invoke('dialog:selectDir'),
   viewPack: (p) => ipcRenderer.invoke('pack:view', p),
