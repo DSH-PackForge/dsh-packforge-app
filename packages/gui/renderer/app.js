@@ -4,6 +4,14 @@ import { packViewHTML, marketCardHTML, exportPreviewHTML, exportResultHTML, expo
 const bridge = window.packforge ?? null;
 const $ = (id) => document.getElementById(id);
 
+const INSTALL_STAGES = {
+  download: '下载整合包',
+  extract: '解析并解压整合包',
+  install: '运行 pnpm install（依赖重建，可能较慢）…',
+  files: '下载重内容文件',
+  done: '安装完成',
+};
+
 function setStatus(msg, kind = '') {
   const el = $('status');
   el.textContent = msg;
@@ -52,10 +60,11 @@ async function installFromMarket(btn) {
   if (!source) return setStatus('该条目无下载地址', 'err');
   setStatus('安装中：' + source, '');
   try {
+    const size = Number(btn.dataset.size);
     const r = await bridge.installPack({
       source,
       expectedSha256: btn.dataset.sha || undefined,
-      expectedSize: btn.dataset.size ? Number(btn.dataset.size) : undefined,
+      expectedSize: Number.isInteger(size) && size > 0 ? size : undefined,
     });
     setStatus(`已安装：${r.profileName} → ${r.dir}`, 'ok');
   } catch (e) {
@@ -81,7 +90,10 @@ async function openPackView() {
 let exportProfiles = [];
 let exportRoots = [];
 
-const homeLabel = (r) => (r.source === 'classic' ? '经典 ~/.dsh' : `启动器 · ${r.home || r.root}`);
+const homeLabel = (r) => {
+  const tag = r.source === 'classic' ? '经典' : `启动器 · ${r.home || ''}`;
+  return `${tag} · ${r.root}`;
+};
 
 function profilesForRoot(root) {
   if (!root) return exportProfiles;
@@ -143,12 +155,19 @@ function exportOpts() {
     profileName: $('export-profilename').value.trim() || undefined,
     dshVersion: $('export-dsh').value || undefined,
     include: includedArray(),
+    homeInclude: homeIncludedArray(),
   };
 }
 
 /* 文件(夹)选择（勾选要打进包的内容） */
 let exportAllFiles = [];
 let exportIncluded = null; // null = 全选；否则 Set<rel>
+let exportHomeFiles = [];      // 上一级目录（DSH_HOME）候选，勾选后进 home/
+let exportHomeIncluded = null; // null = 不带 home 级；否则 Set<rel>
+
+function homeIncludedArray() {
+  return exportHomeIncluded == null ? undefined : [...exportHomeIncluded];
+}
 
 function includeSet() {
   return exportIncluded ?? new Set(exportAllFiles.map((f) => f.rel));
@@ -201,14 +220,21 @@ function treeNodesHTML(nodes, set) {
 function renderFilePicker() {
   const field = $('export-files-field');
   const box = $('export-files');
-  if (!exportAllFiles.length) {
+  if (!exportAllFiles.length && !exportHomeFiles.length) {
     field.hidden = true;
     box.innerHTML = '';
     return;
   }
   field.hidden = false;
   const set = includeSet();
-  box.innerHTML = `<ul class="fp-tree">${treeNodesHTML(buildExportTree(exportAllFiles), set)}</ul>`;
+  let html = '';
+  if (exportAllFiles.length) {
+    html += `<div class="fp-group">Profile 文件</div><ul class="fp-tree">${treeNodesHTML(buildExportTree(exportAllFiles), set)}</ul>`;
+  }
+  if (exportHomeFiles.length) {
+    html += `<div class="fp-group">上一级目录（DSH_HOME，可选）</div>${homeFilesHTML(exportHomeIncluded ?? new Set())}`;
+  }
+  box.innerHTML = html;
   box.querySelectorAll('input[data-dir]').forEach((cb) => {
     const files = dirLeafFiles(cb.dataset.dir);
     const sel = files.filter((r) => set.has(r)).length;
@@ -217,6 +243,14 @@ function renderFilePicker() {
   });
   $('export-select-all').checked = exportIncluded == null;
   $('export-files-count').textContent = `${set.size} / ${exportAllFiles.length} 个文件`;
+}
+
+/** 上一级目录（DSH_HOME）候选：平铺 checkbox 列表，勾选后进 home/。 */
+function homeFilesHTML(set) {
+  return exportHomeFiles.map((f) => {
+    const checked = set.has(f.rel) ? 'checked' : '';
+    return `<label class="check fp-row"><input type="checkbox" data-home-file="${escape(f.rel)}" ${checked}> <span class="mono">${escape(f.rel)}</span></label>`;
+  }).join('');
 }
 
 function onSelectAll(e) {
@@ -228,7 +262,11 @@ function onPickerChange(e) {
   const t = e.target;
   if (t.dataset.dir) setIncluded(dirLeafFiles(t.dataset.dir), t.checked);
   else if (t.dataset.file) setIncluded([t.dataset.file], t.checked);
-  else return;
+  else if (t.dataset.homeFile) {
+    const set = new Set(exportHomeIncluded ?? []);
+    if (t.checked) set.add(t.dataset.homeFile); else set.delete(t.dataset.homeFile);
+    exportHomeIncluded = set.size ? set : null;
+  } else return;
   updatePreview();
 }
 
@@ -240,8 +278,8 @@ function onModeChange() {
 }
 
 async function updatePreview() {
-  const p = currentProfile();
   const box = $('export-preview');
+  const p = currentProfile();
   if (!p) {
     box.innerHTML = '<p class="muted">选择 Profile 后显示打包预览</p>';
     $('export-files-field').hidden = true;
@@ -253,6 +291,7 @@ async function updatePreview() {
   try {
     const ins = await bridge.inspectProfile({ profile: { name: p.name, dir: p.dir }, ...exportOpts() });
     exportAllFiles = ins.allFiles ?? ins.files ?? [];
+    exportHomeFiles = ins.homeFiles ?? [];
     renderFilePicker();
     $('export-special').innerHTML = specialFieldHTML(ins.special);
     box.innerHTML = exportPreviewHTML(ins);
@@ -262,12 +301,12 @@ async function updatePreview() {
 }
 
 async function doExport() {
+  const repo = $('export-mode').value === 'repo';
   const p = currentProfile();
   if (!p) return setStatus('未选择 Profile', 'err');
   const btn = $('export-go');
   const busy = $('export-busy');
   const result = $('export-result');
-  const repo = $('export-mode').value === 'repo';
   const out = $('export-out').value.trim() || undefined;
   btn.disabled = true;
   busy.hidden = false;
@@ -305,6 +344,82 @@ async function doExport() {
   }
 }
 
+/* ---- 导出 DSH_HOME（导出页子 tab） ---- */
+let exportHomes = [];
+
+function switchExportTab(tab) {
+  document.querySelectorAll('[data-export-tab]').forEach((b) => b.classList.toggle('active', b.dataset.exportTab === tab));
+  $('export-profile-view').hidden = tab !== 'profile';
+  $('export-home-view').hidden = tab !== 'home';
+}
+
+function renderHomeSel() {
+  const sel = $('home-sel');
+  sel.innerHTML = exportHomes.length
+    ? exportHomes.map((h, i) => `<option value="${i}">${escape(h.name)}（${escape(h.dir)}）</option>`).join('')
+    : '<option value="">（未发现 DSH_HOME）</option>';
+}
+
+async function initExportHome() {
+  try { exportHomes = await bridge.listHomes(); } catch { exportHomes = []; }
+  renderHomeSel();
+  const vsel = $('home-dsh');
+  let versions = [];
+  try { versions = await bridge.listDshVersions(); } catch { /* 忽略 */ }
+  vsel.innerHTML = '<option value="">自动（最新已装）</option>'
+    + versions.map((v) => `<option value="${escape(v)}">${escape(v)}</option>`).join('');
+}
+
+function currentHome() {
+  const idx = $('home-sel').value;
+  return idx === '' ? null : exportHomes[Number(idx)];
+}
+
+function updateHomePreview() {
+  const box = $('home-preview');
+  const h = currentHome();
+  box.innerHTML = h
+    ? '<p>将把整个 DSH_HOME 打包为 dshhome 整合包：</p><ul><li>多个 profile（排除 web / headless 安装基线）</li><li>.agent-presets/ 预设</li><li>skills/ 技能</li><li>AGENTS.md 全局指令</li><li>data/ 全局数据</li></ul>'
+    : '<p class="muted">选择 DSH_HOME 后显示</p>';
+}
+
+async function doExportHome() {
+  const h = currentHome();
+  if (!h) return setStatus('未选择 DSH_HOME', 'err');
+  const btn = $('home-go');
+  const busy = $('home-busy');
+  const result = $('home-result');
+  const out = $('home-out').value.trim() || undefined;
+  btn.disabled = true;
+  busy.hidden = false;
+  result.hidden = true;
+  try {
+    const r = await bridge.exportHome({
+      home: { name: h.name, dir: h.dir },
+      name: $('home-name').value.trim() || undefined,
+      version: $('home-version').value.trim() || undefined,
+      displayName: $('home-display').value.trim() || undefined,
+      description: $('home-desc').value.trim() || undefined,
+      author: $('home-author').value.trim() || undefined,
+      icon: $('home-icon').value.trim() || undefined,
+      dshVersion: $('home-dsh').value || undefined,
+      defaultProfile: $('home-default-profile').value.trim() || undefined,
+      out,
+    });
+    result.innerHTML = exportResultHTML(r);
+    result.className = 'result ok';
+    setStatus(`导出完成：${r.output}`, 'ok');
+  } catch (e) {
+    result.innerHTML = `<p class="err">✗ ${escape(e.message)}</p>`;
+    result.className = 'result err';
+    setStatus(e.message, 'err');
+  } finally {
+    result.hidden = false;
+    btn.disabled = false;
+    busy.hidden = true;
+  }
+}
+
 /* ---- 导入 ---- */
 async function doImport() {
   const source = $('import-source').value.trim();
@@ -319,11 +434,44 @@ async function doImport() {
   try {
     const r = await bridge.installPack(opts);
     $('import-out').textContent = r.dryRun
-      ? `（预览）会安装为 Profile「${r.profileName}」到 ${r.dir}`
+      ? `（预览）会安装为 Profile「${r.profileName}」到 ${r.dir}${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`
       : `✓ 已安装：${r.profileName}\n${r.dir}\nfiles 下载 ${r.filesDownloaded} 个`;
     setStatus(r.dryRun ? '预览完成' : '安装完成', 'ok');
   } catch (e) {
     $('import-out').textContent = '✗ ' + e.message;
+    setStatus(e.message, 'err');
+  }
+}
+
+function switchImportTab(tab) {
+  document.querySelectorAll('[data-import-tab]').forEach((b) => b.classList.toggle('active', b.dataset.importTab === tab));
+  $('import-profile-view').hidden = tab !== 'profile';
+  $('import-home-view').hidden = tab !== 'home';
+}
+
+async function doImportHome() {
+  const source = $('import-home-source').value.trim();
+  if (!source) return setStatus('请填写整合包路径或 URL', 'err');
+  const opts = {
+    source,
+    home: $('import-home-target').value || undefined,
+    dryRun: $('import-home-dry').checked,
+  };
+  $('import-home-out').textContent = '';
+  try {
+    const r = await bridge.installPack(opts);
+    if (r.dryRun) {
+      $('import-home-out').textContent = r.type === 'dshhome'
+        ? `（预览）会安装为 DSH_HOME 到 ${r.dir}\n  profile: ${r.profiles.join(', ')}（默认 ${r.defaultProfile}）${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`
+        : `（预览）会安装为 Profile「${r.profileName}」到 ${r.dir}${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`;
+    } else {
+      $('import-home-out').textContent = r.type === 'dshhome'
+        ? `✓ 已安装 DSH_HOME：${r.dir}\n  profile: ${r.profiles.join(', ')}（默认 ${r.defaultProfile}）\nfiles 下载 ${r.filesDownloaded} 个`
+        : `✓ 已安装：${r.profileName}\n${r.dir}\nfiles 下载 ${r.filesDownloaded} 个`;
+    }
+    setStatus(r.dryRun ? '预览完成' : '安装完成', 'ok');
+  } catch (e) {
+    $('import-home-out').textContent = '✗ ' + e.message;
     setStatus(e.message, 'err');
   }
 }
@@ -371,6 +519,36 @@ function init() {
   });
   $('import-go').addEventListener('click', doImport);
 
+  // 导入页子 tab（Profile / DSH_HOME）
+  document.querySelectorAll('[data-import-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => switchImportTab(btn.dataset.importTab));
+  });
+  $('import-home-browse').addEventListener('click', async () => {
+    const p = await bridge.selectFile([{ name: 'DSH 整合包', extensions: ['dspack'] }]);
+    if (p) $('import-home-source').value = p;
+  });
+  $('import-home-go').addEventListener('click', doImportHome);
+
+  // 导出页子 tab（Profile / DSH_HOME）
+  document.querySelectorAll('[data-export-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => switchExportTab(btn.dataset.exportTab));
+  });
+  $('home-sel').addEventListener('change', updateHomePreview);
+  $('home-refresh').addEventListener('click', initExportHome);
+  $('home-go').addEventListener('click', doExportHome);
+  $('home-browse').addEventListener('click', async () => {
+    const d = await bridge.selectDir();
+    if (d) $('home-out').value = d;
+  });
+
+  // 安装进度：异步推送到状态栏 + 导入页输出区，避免「卡住」观感。
+  bridge.onInstallProgress?.((p) => {
+    const label = INSTALL_STAGES[p?.stage] ?? p?.detail ?? p?.stage ?? '';
+    if (!label) return;
+    setStatus(`正在安装… ${label}`, '');
+    if (!$('pane-import').hidden) $('import-out').textContent = `⏳ ${label}`;
+  });
+
   if (!bridge) {
     setStatus('未检测到 Electron 桥（window.packforge）。请用桌面端运行：pnpm --filter gui start', 'err');
     return;
@@ -384,6 +562,7 @@ function init() {
   });
   refreshMarket();
   initExport();
+  initExportHome();
 }
 
 init();

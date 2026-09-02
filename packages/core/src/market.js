@@ -56,6 +56,7 @@ function parseIndex(text) {
 export function normalizeMarketPack(entry, locale = 'zh-CN') {
   if (!entry || typeof entry.name !== 'string') return null;
   const urls = collectUrls(entry);
+  const manifestVersion = entry.manifestVersion ?? inferManifestVersion(urls);
   return {
     name: entry.name,
     displayName: pickLocale(entry.displayName, locale, entry.name),
@@ -64,17 +65,22 @@ export function normalizeMarketPack(entry, locale = 'zh-CN') {
     author: entry.author ?? '',
     icon: pickLocale(entry.icon, locale, ''),
     dshVersion: entry.dshVersion ?? '',
+    type: entry.type ?? inferType(manifestVersion),
     profileName: entry.profileName ?? entry.name,
+    defaultProfile: entry.defaultProfile ?? '',
     category: entry.category ?? '',
     updatedAt: entry.updatedAt ?? '',
-    manifestVersion: entry.manifestVersion ?? inferManifestVersion(urls),
-    format: detectFormat(entry, urls),
+    manifestVersion,
+    format: detectFormat(entry, urls, manifestVersion),
     urls,
     downloadUrl: urls[0] ?? '',
     sha256: entry.sha256 ?? entry.files?.[0]?.sha256 ?? '',
     size: entry.size ?? entry.files?.[0]?.size ?? 0,
     bundles: entry.bundles ?? [],
     dependencies: entry.dependencies ?? {},
+    profiles: entry.profiles,
+    presets: entry.presets,
+    skills: entry.skills,
   };
 }
 
@@ -87,12 +93,17 @@ function collectUrls(entry) {
   return entry.downloadUrl ? [entry.downloadUrl] : [];
 }
 
-function detectFormat(entry, urls) {
+function detectFormat(entry, urls, manifestVersion) {
   if (urls.some((u) => /\.dspack(\?|#|$)/i.test(u))) return 'dspack';
   if (urls.some((u) => /\.tgz(\?|#|$)/i.test(u))) return 'tgz';
-  if (entry.manifestVersion === 4) return 'dspack';
-  if (entry.manifestVersion === 3) return 'tgz';
+  if (manifestVersion === 5 || manifestVersion === 4) return 'dspack';
+  if (manifestVersion === 3) return 'tgz';
   return 'unknown';
+}
+
+/** manifestVersion → type 兜底（未显式声明 type 时）。 */
+function inferType(manifestVersion) {
+  return manifestVersion === 5 ? 'dshhome' : 'profile';
 }
 
 function inferManifestVersion(urls) {

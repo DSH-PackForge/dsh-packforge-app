@@ -1,13 +1,25 @@
 // .dspack 容器 = 标准 ZIP（无自定义魔数头，压缩软件可直接打开）。
-// 格式识别由根 manifest.json（manifestVersion=4）+ 布局（机器文件在根、用户文件在 overrides/）承担，
-// 见 DSH-PackForge/specs/pack-structure/v2.md。
+// 格式识别由根 dspack.json（容器标记）+ 根 manifest.json（manifestVersion/type）共同承担，
+// 见 DSH-PackForge/specs/pack-structure/v2.md（单 profile）与 v3.md（dshhome）。
 import { zipSync, unzipSync } from 'fflate';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/** 容器标记固定 format 值。 */
+export const DSPACK_FORMAT = 'dspack';
+
+/** 容器版本：统一为 3（pack-structure v3，覆盖 profile / dshhome 两种形态）。 */
+export const DSPACK_CONTAINER_VERSION = 3;
+
+/** 生成根标记文件 dspack.json 的内容。 */
+export function dspackMarker(version) {
+  return { format: DSPACK_FORMAT, version };
+}
+
 /**
  * 打包：entries 为 { rel: Uint8Array }（rel 用 '/' 分隔）→ 标准 ZIP 字节。
+ * 纯 ZIP，不关心标记；调用方（pack.js）负责把 dspack.json / manifest.json 放进 entries。
  * 整包 sha256 覆盖全部 ZIP 字节。
  */
 export function buildDspack(entries) {
@@ -15,18 +27,38 @@ export function buildDspack(entries) {
 }
 
 /**
- * 解包：标准 ZIP 字节 → entries。非 ZIP（或空内容）抛错。
- * @returns {{ entries: Record<string, Uint8Array> }}
+ * 解包：标准 ZIP 字节 → { entries, marker }。
+ * 非 ZIP（或空内容）抛错；marker 为根 dspack.json（format 必须是 "dspack"），
+ * 缺标记时 marker = null（兼容旧包 / 测试包，靠 manifest 识别）。
+ * @returns {{ entries: Record<string, Uint8Array>, marker: {format:string,version:number}|null }}
  */
 export function parseDspack(bytes) {
   if (!(bytes instanceof Uint8Array) || bytes.length === 0) {
     throw new Error('不是有效的 .dspack 文件（空内容）');
   }
+  let entries;
   try {
-    return { entries: unzipSync(bytes) };
+    entries = unzipSync(bytes);
   } catch {
     throw new Error('不是有效的 .dspack 文件（无法按 ZIP 解压）');
   }
+  return { entries, marker: parseMarker(entries) };
+}
+
+/** 读根 dspack.json：缺失 → null；format 非 "dspack" → 拒载（外来 ZIP / 损坏）。 */
+function parseMarker(entries) {
+  const raw = entries['dspack.json'];
+  if (!raw) return null;
+  let m;
+  try {
+    m = JSON.parse(decodeText(raw));
+  } catch {
+    throw new Error('dspack.json 不是有效 JSON');
+  }
+  if (!m || typeof m !== 'object' || Array.isArray(m) || m.format !== DSPACK_FORMAT) {
+    throw new Error('dspack.json 不是有效的容器标记（format 必须为 "dspack"）');
+  }
+  return m;
 }
 
 /** 文本 → UTF-8 字节（不落盘用）。 */

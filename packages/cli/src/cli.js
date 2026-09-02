@@ -2,9 +2,11 @@ import { parseArgs } from 'node:util';
 import { NodeHost } from '@dsh-packforge/host-node';
 import {
   discoverProfiles,
+  discoverHomes,
   resolveProfileInput,
   listInstalledDshVersions,
   packProfile,
+  packHome,
   inspectProfile,
   inspectPack,
   installPack,
@@ -22,7 +24,9 @@ const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v4 
 
 命令:
   list                列出本机可导出的 Profile（含经典 ~/.dsh 与 DSH 启动器实例）
-  pack <profile|dir>  一键导出为 .dspack 整合包
+  homes               列出本机 DSH_HOME 实例（dshhome 导出 / 安装目标）
+  pack <profile|dir>  一键导出单个 Profile 为 .dspack 整合包
+  pack-home <home>    一键导出整个 DSH_HOME 为 .dspack 整合包（dshhome）
   inspect <profile>   打包前预览（将包含/排除哪些文件、manifest 内容）
   view <source>        查看一个已有的 .dspack（本地路径或 URL）
   install <source>    一键安装 .dspack 整合包（本地路径或 URL）
@@ -55,11 +59,13 @@ install 选项:
   --name <slug>           安装后的 Profile 目录名（默认取 manifest）
   --registry <url>        pnpm 安装依赖时的镜像源
   --profiles-root <path>  安装目标根（默认 ~/.dsh/profiles）
+  --home <path>           dshhome 安装目标（默认 ~/.dsh；仅 dshhome 包）
   --sha256 <hex>          从索引带入的完整性校验
   --size <bytes>          从索引带入的大小校验
   --force                 覆盖已存在的同名 Profile
   --no-install            只解包落盘，不执行 pnpm install
   --dry-run               只预览安装计划，不写任何文件
+  --timeout <ms>          pnpm install 超时（默认 10 分钟）
 
 示例:
   dspack list
@@ -80,8 +86,12 @@ export async function main(argv) {
     switch (cmd) {
       case 'list':
         return await runList(host);
+      case 'homes':
+        return await runHomes(host);
       case 'pack':
         return await runPack(host, rest);
+      case 'pack-home':
+        return await runPackHome(host, rest);
       case 'inspect':
         return await runInspect(host, rest);
       case 'view':
@@ -131,6 +141,93 @@ async function runList(host) {
     const tag = p.source === 'classic' ? '经典' : `启动器·${p.home ?? '?'}`;
     log(`  ${p.name}\t[${tag}]\t${p.dir}`);
   }
+}
+
+async function runHomes(host) {
+  const homes = await discoverHomes(host);
+  log('已发现 DSH_HOME 实例：');
+  if (!homes.length) {
+    log('  （无——未在 ~/.dsh 或 DSH 启动器中找到任何实例）');
+    return;
+  }
+  for (const h of homes) {
+    const tag = h.source === 'classic' ? '经典' : '启动器';
+    log(`  ${h.name}\t[${tag}]\t${h.dir}`);
+  }
+}
+
+async function runPackHome(host, args) {
+  const { values, positionals } = parse(
+    {
+      name: { type: 'string' },
+      'display-name': { type: 'string' },
+      version: { type: 'string' },
+      description: { type: 'string' },
+      author: { type: 'string' },
+      icon: { type: 'string' },
+      'dsh-version': { type: 'string' },
+      'default-profile': { type: 'string' },
+      out: { type: 'string' },
+      force: { type: 'boolean' },
+    },
+    args,
+  );
+
+  const input = positionals[0];
+  let home = null;
+  if (input) {
+    const abs = host.resolvePath(input);
+    const st = await host.stat(abs);
+    if (st?.isDirectory) {
+      home = { name: host.basename(abs), dir: abs };
+    } else {
+      const homes = await discoverHomes(host);
+      home = homes.find((h) => h.name === input) ?? null;
+    }
+  }
+  if (!home) {
+    const homes = await discoverHomes(host);
+    if (homes.length === 1) home = homes[0];
+  }
+  if (!home) throw new Error(`找不到 DSH_HOME「${input ?? ''}」。${homesHint(await discoverHomes(host))}`);
+
+  let dshVersion = values['dsh-version'];
+  if (!dshVersion) {
+    const versions = await listInstalledDshVersions(host);
+    dshVersion = versions[0] || '';
+  }
+
+  const result = await packHome(host, home, {
+    name: values.name,
+    displayName: values['display-name'],
+    version: values.version,
+    description: values.description,
+    author: values.author,
+    icon: values.icon,
+    dshVersion,
+    defaultProfile: values['default-profile'],
+    out: values.out,
+    force: values.force,
+  });
+
+  const m = result.manifest;
+  log('✓ dshhome 整合包导出完成');
+  log(`  Home     : ${home.name} (${home.dir})`);
+  log(`  名称     : ${m.name}`);
+  log(`  展示名   : ${renderLocale(m.displayName)}`);
+  log(`  版本     : ${m.version}`);
+  log(`  dsh 版本 : ${m.dshVersion || '（未钉定）'}`);
+  log(`  profile  : ${Object.keys(m.profiles).length} 个（默认 ${m.defaultProfile}）`);
+  log(`  preset   : ${Object.keys(m.presets ?? {}).length} 个`);
+  log(`  skill    : ${(m.skills ?? []).length} 个`);
+  log(`  指令     : ${m.instructions}`);
+  log(`  包含文件 : ${result.included}（排除 ${result.excluded}）`);
+  log(`  输出     : ${result.output} (${formatBytes(result.size)})`);
+  log(`  SHA-256  : ${result.sha256}`);
+}
+
+function homesHint(homes) {
+  return homes.length ? `可用：${homes.map((h) => h.name).join(', ')}\n也可以直接传目录路径。` : '未发现任何 DSH_HOME。';
 }
 
 async function runPack(host, args) {
@@ -293,11 +390,13 @@ async function runInstall(host, args) {
       name: { type: 'string' },
       registry: { type: 'string' },
       'profiles-root': { type: 'string' },
+      home: { type: 'string' },
       sha256: { type: 'string' },
       size: { type: 'string' },
       force: { type: 'boolean' },
       'no-install': { type: 'boolean' },
       'dry-run': { type: 'boolean' },
+      timeout: { type: 'string' },
     },
     args,
   );
@@ -306,10 +405,15 @@ async function runInstall(host, args) {
   if (expectedSize !== undefined && !Number.isFinite(expectedSize)) {
     throw new Error(`--size 必须是整数：${values.size}`);
   }
+  const timeoutMs = values.timeout != null && values.timeout !== '' ? Number(values.timeout) : undefined;
+  if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+    throw new Error(`--timeout 必须是正整数（毫秒）：${values.timeout}`);
+  }
 
   const result = await installPack(host, {
     source: positionals[0],
     profilesRoot: values['profiles-root'],
+    home: values.home,
     name: values.name,
     registry: values.registry,
     force: values.force,
@@ -317,19 +421,31 @@ async function runInstall(host, args) {
     dryRun: values['dry-run'],
     expectedSha256: values.sha256,
     expectedSize,
+    timeoutMs,
   });
 
   if (result.dryRun) {
     log('（预览，未写任何文件）');
-    log(`  Profile : ${result.profileName}`);
-    log(`  目标    : ${result.dir}`);
+    if (result.type === 'dshhome') {
+      log(`  DSH_HOME: ${result.dir}`);
+      log(`  profile : ${result.profiles.join(', ')}（默认 ${result.defaultProfile}）`);
+    } else {
+      log(`  Profile : ${result.profileName}`);
+      log(`  目标    : ${result.dir}`);
+    }
     log(`  名称    : ${result.manifest.name}@${result.manifest.version}`);
     log(`  dsh     : ${result.manifest.dshVersion || '未钉定'}`);
+    if (result.exists) log(`  已存在  : 是（真实安装需 --force 覆盖）`);
     return;
   }
 
   log('✓ 整合包安装完成');
-  log(`  Profile   : ${result.profileName} (${result.dir})`);
+  if (result.type === 'dshhome') {
+    log(`  DSH_HOME  : ${result.dir}`);
+    log(`  profile   : ${result.profiles.join(', ')}（默认 ${result.defaultProfile}）`);
+  } else {
+    log(`  Profile   : ${result.profileName} (${result.dir})`);
+  }
   log(`  依赖重建 : ${result.installed ? 'pnpm install ✔' : '已跳过（--no-install）'}`);
   if (result.reconcile) {
     const r = result.reconcile;

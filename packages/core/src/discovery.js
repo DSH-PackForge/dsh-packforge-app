@@ -82,6 +82,38 @@ export async function discoverProfiles(host, opts = {}) {
   return { profiles, roots };
 }
 
+/**
+ * 发现全部 DSH_HOME 实例（经典默认 home + 启动器 homes[]）。
+ * dshhome 导出 / 安装以「整个 home」为单元，故需要 home 而非 profile 粒度。
+ * @param {Host} host
+ * @param {object} opts { home?, launcherConfig? }
+ * @returns {Array<{name, dir, source}>} source ∈ 'classic' | 'launcher'
+ */
+export async function discoverHomes(host, opts = {}) {
+  const defaultHome = opts.home || host.homedir();
+  const homes = [];
+  const seen = new Set();
+
+  const add = (dir, name, source) => {
+    const abs = host.resolvePath(dir);
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    homes.push({ name, dir: abs, source });
+  };
+
+  // 1) 经典 ~/.dsh（默认单实例）
+  add(host.joinPath(defaultHome, '.dsh'), 'default', 'classic');
+
+  // 2) 启动器 homes[]（config.json 是权威注册表）
+  const cfg = await readLauncherConfig(host, opts.launcherConfig);
+  for (const h of cfg?.homes ?? []) {
+    if (!h?.path) continue;
+    add(h.path, h.name || h.id || h.path, 'launcher');
+  }
+
+  return homes;
+}
+
 /** 枚举启动器已安装的 DSH 版本（精确版本号），降序。 */
 export async function listInstalledDshVersions(host, opts = {}) {
   const cfg = await readLauncherConfig(host, opts.launcherConfig);

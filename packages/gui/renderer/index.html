@@ -60,93 +60,101 @@
           <div class="pane-head">
             <div>
               <h1>导出</h1>
-              <p class="sub">把 Profile 打包为 .dspack 或源仓库</p>
+              <p class="sub">打包 Profile 或整个 DSH_HOME</p>
+            </div>
+            <div class="sub-tabs">
+              <button data-export-tab="profile" class="active">导出 Profile</button>
+              <button data-export-tab="home">导出 DSH_HOME</button>
             </div>
           </div>
 
+          <div id="export-profile-view">
           <div class="export-layout">
             <div class="panel form">
-              <div class="field">
-                <label for="export-home">DSH-HOME</label>
-                <select id="export-home" title="先选 DSH 根目录（经典 ~/.dsh 或启动器实例）"></select>
-              </div>
-
-              <div class="field">
-                <label for="export-profile">Profile</label>
-                <div class="row">
-                  <select id="export-profile"></select>
-                  <button id="export-refresh" class="ghost" title="重新扫描">⟳</button>
+              <div class="field-group">
+                <div class="field-group-title">Profile 来源</div>
+                <div class="field">
+                  <label for="export-home">DSH-HOME</label>
+                  <select id="export-home" title="先选 DSH 根目录（经典 ~/.dsh 或启动器实例）"></select>
+                </div>
+                <div class="field">
+                  <label for="export-profile">Profile</label>
+                  <div class="row">
+                    <select id="export-profile"></select>
+                    <button id="export-refresh" class="ghost" title="重新扫描">⟳</button>
+                  </div>
                 </div>
               </div>
 
-              <div class="field">
-                <label for="export-mode">导出形态</label>
-                <select id="export-mode">
-                  <option value="dspack">.dspack 单文件（分发用）</option>
-                  <option value="repo">仓库（源形态，可二次开发）</option>
-                </select>
+              <div class="field-group">
+                <div class="field-group-title">导出形态</div>
+                <div class="field">
+                  <label for="export-mode">导出形态</label>
+                  <select id="export-mode">
+                    <option value="dspack">.dspack 单文件（分发用）</option>
+                    <option value="repo">仓库（源形态，可二次开发）</option>
+                  </select>
+                </div>
+                <div class="field" id="export-content-field" hidden>
+                  <label for="export-content">仓库内容</label>
+                  <select id="export-content">
+                    <option value="manifest">仅清单（manifest.json）</option>
+                    <option value="readme">清单 + README</option>
+                    <option value="full" selected>全套文件（overrides/ + release/）</option>
+                  </select>
+                </div>
               </div>
 
-              <div class="field" id="export-content-field" hidden>
-                <label for="export-content">仓库内容</label>
-                <select id="export-content">
-                  <option value="manifest">仅清单（manifest.json）</option>
-                  <option value="readme">清单 + README</option>
-                  <option value="full" selected>全套文件（overrides/ + release/）</option>
-                </select>
+              <div class="field-group">
+                <div class="field-group-title">整合包信息</div>
+                <div class="field">
+                  <label for="export-name">整合包标识（name）</label>
+                  <input id="export-name" placeholder="默认用 Profile 名（kebab-case）" />
+                </div>
+                <div class="field">
+                  <label for="export-version">版本（version）</label>
+                  <input id="export-version" placeholder="默认用 package.json 的 version" />
+                </div>
+                <div class="field">
+                  <label for="export-display">展示名</label>
+                  <input id="export-display" placeholder="默认用 Profile 名" />
+                </div>
+                <div class="field">
+                  <label for="export-desc">描述</label>
+                  <textarea id="export-desc" rows="2" placeholder="一句话介绍这个整合包（可选）"></textarea>
+                </div>
+                <div class="field">
+                  <label for="export-author">作者</label>
+                  <input id="export-author" placeholder="默认用 package.json 的 author" />
+                </div>
+                <div class="field">
+                  <label for="export-icon">图标（icon）</label>
+                  <input id="export-icon" placeholder="自动识别 icons/ 或 logo.*；也可填 URL 或归档内路径" />
+                </div>
+                <div class="field">
+                  <label for="export-profilename">安装名（profileName）</label>
+                  <input id="export-profilename" placeholder="默认用当前 Profile 名" />
+                </div>
               </div>
 
-              <div class="field">
-                <label for="export-name">整合包标识（name）</label>
-                <input id="export-name" placeholder="默认用 Profile 名（kebab-case）" />
-              </div>
-
-              <div class="field">
-                <label for="export-version">版本（version）</label>
-                <input id="export-version" placeholder="默认用 package.json 的 version" />
-              </div>
-
-              <div class="field">
-                <label for="export-display">展示名</label>
-                <input id="export-display" placeholder="默认用 Profile 名" />
-              </div>
-
-              <div class="field">
-                <label for="export-desc">描述</label>
-                <textarea id="export-desc" rows="2" placeholder="一句话介绍这个整合包（可选）"></textarea>
-              </div>
-
-              <div class="field">
-                <label for="export-author">作者</label>
-                <input id="export-author" placeholder="默认用 package.json 的 author" />
-              </div>
-
-              <div class="field">
-                <label for="export-icon">图标（icon）</label>
-                <input id="export-icon" placeholder="自动识别 icons/ 或 logo.*；也可填 URL 或归档内路径" />
-              </div>
-
-              <div class="field">
-                <label for="export-profilename">安装名（profileName）</label>
-                <input id="export-profilename" placeholder="默认用当前 Profile 名" />
+              <div class="field-group">
+                <div class="field-group-title">DSH 版本与输出</div>
+                <div class="field">
+                  <label for="export-dsh">DSH 版本</label>
+                  <select id="export-dsh" title="钉定到已装版本；留空取最新"></select>
+                </div>
+                <div class="field">
+                  <label for="export-out">输出目录</label>
+                  <div class="row">
+                    <input id="export-out" placeholder="默认当前目录" />
+                    <button id="export-browse" class="ghost">浏览…</button>
+                  </div>
+                </div>
               </div>
 
               <div class="field">
                 <label>特殊内容 <span class="muted">（自动识别）</span></label>
                 <div id="export-special" class="special-box"><span class="muted">选择 Profile 后显示</span></div>
-              </div>
-
-              <div class="field">
-                <label for="export-dsh">DSH 版本</label>
-                <select id="export-dsh" title="钉定到已装版本；留空取最新"></select>
-              </div>
-
-              <div class="field">
-                <label for="export-out">输出目录</label>
-                <div class="row">
-                  <input id="export-out" placeholder="默认当前目录" />
-                  <button id="export-browse" class="ghost">浏览…</button>
-                </div>
               </div>
 
               <div class="field" id="export-files-field" hidden>
@@ -170,6 +178,82 @@
           </div>
 
           <div id="export-result" class="result" hidden></div>
+          </div><!-- /export-profile-view -->
+
+          <div id="export-home-view" hidden>
+          <div class="export-layout">
+            <div class="panel form">
+              <div class="field-group">
+                <div class="field-group-title">DSH_HOME 来源</div>
+                <div class="field">
+                  <label for="home-sel">DSH_HOME</label>
+                  <div class="row">
+                    <select id="home-sel"></select>
+                    <button id="home-refresh" class="ghost" title="重新扫描">⟳</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field-group">
+                <div class="field-group-title">整合包信息</div>
+                <div class="field">
+                  <label for="home-name">整合包标识（name）</label>
+                  <input id="home-name" placeholder="kebab-case（必填）" />
+                </div>
+                <div class="field">
+                  <label for="home-version">版本（version）</label>
+                  <input id="home-version" placeholder="默认 1.0.0" />
+                </div>
+                <div class="field">
+                  <label for="home-display">展示名</label>
+                  <input id="home-display" placeholder="默认用 home 名" />
+                </div>
+                <div class="field">
+                  <label for="home-desc">描述</label>
+                  <textarea id="home-desc" rows="2" placeholder="一句话介绍这个整合包（可选）"></textarea>
+                </div>
+                <div class="field">
+                  <label for="home-author">作者</label>
+                  <input id="home-author" placeholder="可选" />
+                </div>
+                <div class="field">
+                  <label for="home-icon">图标（icon）</label>
+                  <input id="home-icon" placeholder="可选（URL 或归档内路径）" />
+                </div>
+                <div class="field">
+                  <label for="home-default-profile">默认 Profile（defaultProfile）</label>
+                  <input id="home-default-profile" placeholder="默认字母序第一个 Profile" />
+                </div>
+              </div>
+
+              <div class="field-group">
+                <div class="field-group-title">DSH 版本与输出</div>
+                <div class="field">
+                  <label for="home-dsh">DSH 版本</label>
+                  <select id="home-dsh" title="钉定到已装版本；留空取最新"></select>
+                </div>
+                <div class="field">
+                  <label for="home-out">输出目录</label>
+                  <div class="row">
+                    <input id="home-out" placeholder="默认当前目录" />
+                    <button id="home-browse" class="ghost">浏览…</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="toolbar">
+                <button id="home-go" class="primary">导出 dshhome</button>
+                <span id="home-busy" class="muted" hidden>正在导出…</span>
+              </div>
+            </div>
+
+            <aside id="home-preview" class="panel">
+              <p class="muted">选择 DSH_HOME 后显示打包预览</p>
+            </aside>
+          </div>
+
+          <div id="home-result" class="result" hidden></div>
+          </div><!-- /export-home-view -->
         </section>
 
         <!-- 导入 -->
@@ -177,30 +261,57 @@
           <div class="pane-head">
             <div>
               <h1>导入</h1>
-              <p class="sub">安装 .dspack 到本地，成为新的 Profile</p>
+              <p class="sub">安装 .dspack 整合包</p>
+            </div>
+            <div class="sub-tabs">
+              <button data-import-tab="profile" class="active">导入 Profile</button>
+              <button data-import-tab="home">导入 DSH_HOME</button>
             </div>
           </div>
 
-          <div class="panel form">
-            <div class="field">
-              <label for="import-source">整合包</label>
-              <div class="row">
-                <input id="import-source" placeholder="本地 .dspack 路径或 URL" />
-                <button id="import-browse" class="ghost">浏览…</button>
+          <!-- Profile 导入子视图 -->
+          <div id="import-profile-view">
+            <div class="panel form">
+              <div class="field">
+                <label for="import-source">整合包</label>
+                <div class="row">
+                  <input id="import-source" placeholder="本地 .dspack 路径或 URL" />
+                  <button id="import-browse" class="ghost">浏览…</button>
+                </div>
               </div>
+              <div class="field">
+                <label for="import-name">安装名（覆盖 manifest）</label>
+                <input id="import-name" placeholder="可选" />
+              </div>
+              <div class="field">
+                <label for="import-root">目标根</label>
+                <input id="import-root" placeholder="默认 ~/.dsh/profiles" />
+              </div>
+              <label class="field check"><span><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</span></label>
+              <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
             </div>
-            <div class="field">
-              <label for="import-name">安装名（覆盖 manifest）</label>
-              <input id="import-name" placeholder="可选" />
-            </div>
-            <div class="field">
-              <label for="import-root">目标根</label>
-              <input id="import-root" placeholder="默认 ~/.dsh/profiles" />
-            </div>
-            <label class="field check"><span><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</span></label>
-            <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
+            <pre id="import-out" class="result"></pre>
           </div>
-          <pre id="import-out" class="result"></pre>
+
+          <!-- DSH_HOME 导入子视图 -->
+          <div id="import-home-view" hidden>
+            <div class="panel form">
+              <div class="field">
+                <label for="import-home-source">整合包</label>
+                <div class="row">
+                  <input id="import-home-source" placeholder="本地 .dspack 路径或 URL" />
+                  <button id="import-home-browse" class="ghost">浏览…</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="import-home-target">目标 DSH_HOME</label>
+                <input id="import-home-target" placeholder="默认 ~/.dsh" />
+              </div>
+              <label class="field check"><span><input type="checkbox" id="import-home-dry" /> 仅预览（dry-run）</span></label>
+              <div class="toolbar"><button id="import-home-go" class="primary">安装</button></div>
+            </div>
+            <pre id="import-home-out" class="result"></pre>
+          </div>
         </section>
 
         <!-- 查看整合包 -->

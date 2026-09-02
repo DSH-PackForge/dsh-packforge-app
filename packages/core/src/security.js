@@ -30,6 +30,10 @@ const DENY_EXACT = new Set([
   '.yarnrc.yml',
   '.pypirc',
   '.npmignore',
+  // DSH_HOME 级：凭据 / 运行时状态 / 全局设置（dshhome 快照默认排除）
+  '.credentials.yaml',
+  '.anonymous-user-id',
+  'settings.yaml',
 ]);
 
 /** 命中扩展名即排除（密钥/证书类） */
@@ -47,6 +51,17 @@ const DENY_BASENAME = [
 
 /** 按相对路径匹配的模式（禁止嵌套打包任何压缩包格式） */
 const DENY_PATH = [/\.tgz$/, /\.tar\.gz$/, /\.zip$/, /\.dspack$/];
+
+/**
+ * 按相对路径前缀匹配（相对 $DSH_HOME 根）。这些是 home 级的运行时/基线目录，
+ * 只在 dshhome 快照语境下排除——用前缀而非任意段，避免误伤同名目录（如其它位置的 web/）。
+ */
+const DENY_PATH_PREFIX = [
+  'attachments/',       // 附件（运行时数据）
+  'profiles/web/',      // 安装基线 profile 模板（PROFILE_TEMPLATES）
+  'profiles/headless/',
+  'skills/.system/',    // 安装内部系统技能（skipSystem）
+];
 
 function matchExt(name) {
   const idx = name.lastIndexOf('.');
@@ -72,6 +87,9 @@ export function isExcluded(relPath) {
   }
   for (const re of DENY_PATH) {
     if (re.test(rel)) return true;
+  }
+  for (const p of DENY_PATH_PREFIX) {
+    if (rel.startsWith(p)) return true;
   }
   return false;
 }

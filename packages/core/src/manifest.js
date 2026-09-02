@@ -41,6 +41,51 @@ export async function buildManifest(host, profile, opts = {}, scan = { files: []
   };
 }
 
+/** 从单个 profile 目录生成 ProfileUnit（manifest v5 `profiles` 的值：复用 v4 单 profile 字段，去掉 profileName）。 */
+async function buildProfileUnit(host, profileDir) {
+  const pkg = parseJson(await host.readTextFile(host.joinPath(profileDir, 'package.json')));
+  const patch = (await host.readTextFile(host.joinPath(profileDir, 'cordis.patch.yml'))) ?? '';
+  return {
+    bundles: extractBundles(pkg),
+    dependencies: await coordinatesFromProfileDeps(host, profileDir, pkg?.dependencies),
+    patch,
+  };
+}
+
+/**
+ * 从 home 根 + 要导出的 profile 列表生成 manifest v5（type: "dshhome"）。
+ * 四类单元：profiles（有依赖坐标）+ presets / skills / instructions（纯文件索引）。
+ * @param {Host} host
+ * @param {{name:string, dir:string}} home home 根目录
+ * @param {object} opts { name, displayName, version, description, author, icon, dshVersion,
+ *                        defaultProfile, profiles:[{name,dir}], presets, skills, instructions, files }
+ */
+export async function buildHomeManifest(host, home, opts = {}) {
+  const profiles = {};
+  for (const p of opts.profiles ?? []) {
+    if (!p?.name || !p?.dir) continue;
+    profiles[p.name] = await buildProfileUnit(host, p.dir);
+  }
+  const names = Object.keys(profiles);
+  return {
+    manifestVersion: 5,
+    type: 'dshhome',
+    name: sanitizeSlug(opts.name || home.name),
+    version: opts.version || '1.0.0',
+    displayName: opts.displayName || home.name,
+    description: opts.description ?? '',
+    author: opts.author || '',
+    icon: opts.icon || '',
+    dshVersion: opts.dshVersion || '',
+    defaultProfile: opts.defaultProfile || names[0] || '',
+    profiles,
+    presets: opts.presets ?? {},
+    skills: opts.skills ?? [],
+    instructions: opts.instructions || 'AGENTS.md',
+    files: opts.files ?? [],
+  };
+}
+
 /** 有序层栈：dsh.profile.bundles 原文顺序，去重，只留字符串。 */
 export function extractBundles(pkg) {
   const bundles = pkg?.dsh?.profile?.bundles;
@@ -181,7 +226,9 @@ export async function coordinatesFromProfileDeps(host, dir, deps) {
       out[`github:${git.owner}/${git.repo}${git.subpath ? `#path:/${git.subpath}` : ''}`] = sha || 'latest';
       continue;
     }
-    if (typeof spec === 'string' && spec && !isExactSemver(spec)) {
+    // 只把「semver 范围」钉精确（^/~/>/ 等）。带 `:` 的是协议型 spec（file:/link:/workspace:/URL/别名），
+    // 必须原样保留——否则导入侧会把它当成 npm registry 包去 404（例如 file: 本地依赖被压平成 0.2.0）。
+    if (typeof spec === 'string' && spec && !isExactSemver(spec) && !spec.includes(':')) {
       const v = await readInstalledVersion(host, host.joinPath(dir, 'node_modules', pkgName, 'package.json'));
       out[pkgName] = v ?? spec;
     } else {
@@ -270,25 +317,47 @@ export function parsePkgGitSpec(spec) {
  * ------------------------------------------------------------------------- */
 
 /**
- * manifest v4 结构校验，返回错误信息数组（空数组 = 合法）。
- * 仅接受 manifestVersion 4；type 仅接受 'profile'（'collection' 预留报「暂未支持」）。
+ * manifest 结构校验（v4 单 profile + v5 dshhome），返回错误信息数组（空数组 = 合法）。
+ * - v4：type 仅接受 'profile'（'collection' 预留报「暂未支持」）；
+ * - v5：type 仅接受 'dshhome'，校验 profiles / presets / skills / instructions / defaultProfile。
  */
 export function validateManifest(m) {
   const errors = [];
   if (!m || typeof m !== 'object' || Array.isArray(m)) return ['manifest.json 缺失或不是对象'];
 
-  if (m.manifestVersion !== 4) {
+  if (m.manifestVersion !== 4 && m.manifestVersion !== 5) {
     if (m.manifestVersion === 3 || m.manifestVersion === 2) {
-      errors.push(`manifestVersion 为 ${m.manifestVersion}（旧版 .tgz 格式），本工具仅安装 v4(.dspack) 整合包`);
+      errors.push(`manifestVersion 为 ${m.manifestVersion}（旧版 .tgz 格式），本工具仅安装 v4/v5(.dspack) 整合包`);
     } else {
-      errors.push('manifestVersion 必须为 4');
+      errors.push('manifestVersion 必须为 4 或 5');
     }
   }
+
+  // 公共字段（v4/v5 一致）
+  if (typeof m.name !== 'string' || !m.name.trim()) errors.push('manifest.name 缺失或为空');
+  if (typeof m.version !== 'string' || !m.version.trim()) errors.push('manifest.version 缺失或为空');
+  if (m.patch !== undefined && typeof m.patch !== 'string') errors.push('manifest.patch 必须是字符串');
+  if (m.dshVersion !== undefined && typeof m.dshVersion !== 'string') errors.push('manifest.dshVersion 必须是字符串');
+  for (const f of ['displayName', 'description']) {
+    if (m[f] !== undefined && !isLocaleString(m[f])) errors.push(`manifest.${f} 必须是字符串或多语言对象`);
+  }
+
+  if (m.manifestVersion === 5) {
+    if (m.type === 'dshhome') errors.push(...validateDshHome(m));
+    else if (m.type === undefined || m.type === 'profile') errors.push(...validateProfile(m));
+    else errors.push('type 仅支持 "profile" 或 "dshhome"');
+  } else {
+    errors.push(...validateProfile(m));
+  }
+  return errors;
+}
+
+/** v4 单 profile 校验。 */
+function validateProfile(m) {
+  const errors = [];
   if (m.type !== undefined && m.type !== 'profile') {
     errors.push('type 仅支持 "profile"（collection 为预留值，暂未支持）');
   }
-  if (typeof m.name !== 'string' || !m.name.trim()) errors.push('manifest.name 缺失或为空');
-  if (typeof m.version !== 'string' || !m.version.trim()) errors.push('manifest.version 缺失或为空');
   if (!Array.isArray(m.bundles) || m.bundles.some((b) => typeof b !== 'string')) {
     errors.push('manifest.bundles 必须是字符串数组');
   }
@@ -299,19 +368,90 @@ export function validateManifest(m) {
       if (typeof v !== 'string' || !v) errors.push(`dependencies[${k}] 必须是「坐标 → 固定版本」字符串`);
     }
   }
-  if (m.patch !== undefined && typeof m.patch !== 'string') errors.push('manifest.patch 必须是字符串');
-  if (m.dshVersion !== undefined && typeof m.dshVersion !== 'string') errors.push('manifest.dshVersion 必须是字符串');
-  for (const f of ['displayName', 'description']) {
-    if (m[f] !== undefined && !isLocaleString(m[f])) errors.push(`manifest.${f} 必须是字符串或多语言对象`);
+  if (m.files !== undefined) errors.push(...validateFiles(m.files));
+  return errors;
+}
+
+/** v5 dshhome 校验。 */
+function validateDshHome(m) {
+  const errors = [];
+  if (m.type !== undefined && m.type !== 'dshhome') {
+    errors.push('type 仅支持 "dshhome"（单 profile 请用 type:"profile"）');
   }
-  if (m.files !== undefined) {
-    if (!Array.isArray(m.files)) {
-      errors.push('manifest.files 必须是数组');
+
+  if (typeof m.profiles !== 'object' || m.profiles === null || Array.isArray(m.profiles)) {
+    errors.push('manifest.profiles 必须是对象（name → ProfileUnit）');
+  } else {
+    const names = Object.keys(m.profiles);
+    if (names.length === 0) errors.push('manifest.profiles 至少含 1 个 profile');
+    for (const reserved of ['web', 'headless']) {
+      if (names.includes(reserved)) errors.push(`profiles 不得含安装基线模板「${reserved}」`);
+    }
+    for (const [name, u] of Object.entries(m.profiles)) {
+      if (!u || typeof u !== 'object' || Array.isArray(u)) {
+        errors.push(`profiles[${name}] 必须是对象`);
+        continue;
+      }
+      if (!Array.isArray(u.bundles) || u.bundles.some((b) => typeof b !== 'string')) {
+        errors.push(`profiles[${name}].bundles 必须是字符串数组`);
+      }
+      if (typeof u.dependencies !== 'object' || u.dependencies === null || Array.isArray(u.dependencies)) {
+        errors.push(`profiles[${name}].dependencies 必须是对象`);
+      } else {
+        for (const [k, v] of Object.entries(u.dependencies)) {
+          if (typeof v !== 'string' || !v) errors.push(`profiles[${name}].dependencies[${k}] 必须是「坐标 → 固定版本」字符串`);
+        }
+      }
+      if (u.patch !== undefined && typeof u.patch !== 'string') errors.push(`profiles[${name}].patch 必须是字符串`);
+    }
+    if (typeof m.defaultProfile !== 'string' || !m.defaultProfile) {
+      errors.push('manifest.defaultProfile 缺失或为空');
+    } else if (!names.includes(m.defaultProfile)) {
+      errors.push(`defaultProfile「${m.defaultProfile}」不在 profiles 中`);
+    }
+  }
+
+  if (m.presets !== undefined) {
+    if (typeof m.presets !== 'object' || m.presets === null || Array.isArray(m.presets)) {
+      errors.push('manifest.presets 必须是对象（name → PresetUnit）');
     } else {
-      m.files.forEach((f, i) => {
-        for (const e of validateFileEntry(f)) errors.push(`files[${i}] ${e}`);
+      for (const [name, u] of Object.entries(m.presets)) {
+        if (!u || typeof u !== 'object' || Array.isArray(u) || typeof u.path !== 'string' || !u.path) {
+          errors.push(`presets[${name}] 必须是含 path 的对象`);
+        }
+      }
+    }
+  }
+
+  if (m.skills !== undefined) {
+    if (!Array.isArray(m.skills)) {
+      errors.push('manifest.skills 必须是数组');
+    } else {
+      m.skills.forEach((s, i) => {
+        if (!s || typeof s !== 'object' || Array.isArray(s) || typeof s.path !== 'string' || !s.path) {
+          errors.push(`skills[${i}] 必须是含 path 的对象`);
+        }
       });
     }
+  }
+
+  if (m.instructions !== undefined && (typeof m.instructions !== 'string' || !m.instructions)) {
+    errors.push('manifest.instructions 必须是非空字符串');
+  }
+
+  if (m.files !== undefined) errors.push(...validateFiles(m.files));
+  return errors;
+}
+
+/** files[] 数组校验（v4/v5 共用）。 */
+function validateFiles(files) {
+  const errors = [];
+  if (!Array.isArray(files)) {
+    errors.push('manifest.files 必须是数组');
+  } else {
+    files.forEach((f, i) => {
+      for (const e of validateFileEntry(f)) errors.push(`files[${i}] ${e}`);
+    });
   }
   return errors;
 }

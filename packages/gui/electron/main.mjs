@@ -34,8 +34,23 @@ function registerIpc() {
   ipcMain.handle('profiles:export', (_e, opts) => core.packProfile(host, opts.profile, opts));
   ipcMain.handle('profiles:exportRepo', (_e, opts) => core.exportRepo(host, opts.profile, opts));
   ipcMain.handle('profiles:inspect', (_e, opts) => core.inspectProfile(host, opts.profile, opts));
+  ipcMain.handle('home:list', () => core.discoverHomes(host));
+  ipcMain.handle('home:export', (_e, opts) => {
+    // opts.home = { name, dir }；否则 opts.root = profiles 目录，向上推导 home。
+    const dir = opts.home?.dir || (opts.root ? path.dirname(opts.root) : null);
+    if (!dir) throw new Error('缺少 DSH_HOME 目录');
+    const home = opts.home?.dir ? opts.home : { name: path.basename(dir), dir };
+    return core.packHome(host, home, opts);
+  });
   ipcMain.handle('dsh:versions', () => core.listInstalledDshVersions(host));
-  ipcMain.handle('pack:install', (_e, opts) => core.installPack(host, opts));
+  ipcMain.handle('pack:install', (e, opts) =>
+    core.installPack(host, {
+      ...opts,
+      onProgress: (stage, detail) => {
+        if (!e.sender.isDestroyed()) e.sender.send('pack:install-progress', { stage, detail });
+      },
+    }),
+  );
 
   ipcMain.handle('market:list', async (_e, source) => {
     const indexPath = source || MARKET_INDEX;

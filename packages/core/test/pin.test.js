@@ -36,6 +36,33 @@ test('导出时：npm 范围 → 精确版本（读 node_modules），git → co
   }
 });
 
+test('导出：file:/link:/workspace: 协议型依赖原样保留（不压平成版本号）', async () => {
+  const host = new NodeHost();
+  const root = await host.mkdtemp('pfx-file-');
+  try {
+    const dir = host.joinPath(root, 'p');
+    await host.writeTextFile(
+      host.joinPath(dir, 'package.json'),
+      JSON.stringify({
+        dependencies: {
+          'knotlink-connector': 'file:../PLUGINS/knotlink-connector',
+          'local-link': 'link:../local-link',
+          'ws-pkg': 'workspace:*',
+        },
+      }),
+    );
+    // node_modules 里即使有实测版本，也不该覆盖协议型 spec
+    await host.writeTextFile(host.joinPath(dir, 'node_modules', 'knotlink-connector', 'package.json'), JSON.stringify({ version: '0.2.0' }));
+
+    const m = await buildManifest(host, { name: 'x', dir }, {});
+    assert.equal(m.dependencies['knotlink-connector'], 'file:../PLUGINS/knotlink-connector');
+    assert.equal(m.dependencies['local-link'], 'link:../local-link');
+    assert.equal(m.dependencies['ws-pkg'], 'workspace:*');
+  } finally {
+    await host.rm(root, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
 test('gitCommitFromLock：从 packages 区块解析 resolution.commit', () => {
   const lock = [
     "lockfileVersion: '9.0'",

@@ -7,7 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 export class NodeHost {
   #rootCAs;
@@ -120,13 +120,47 @@ export class NodeHost {
   }
 
   async exec(cmd, args, opts = {}) {
-    // 继承 stdio：沙箱内捕获 piped stdio 会 EPERM（历史坑）
-    const result = spawnSync(cmd, args, {
-      cwd: opts.cwd,
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
+    // 用异步 spawn（而非 spawnSync）：避免在 Electron 主进程同步阻塞导致界面卡死；
+    // stdin 置 ignore 防止 pnpm/git 在无人输入时卡在交互提示；可选 timeoutMs 兜底防永久卡住。
+    return await new Promise((resolve) => {
+      let child;
+      try {
+        child = spawn(cmd, args, {
+          cwd: opts.cwd,
+          stdio: ['ignore', 'inherit', 'inherit'],
+          shell: process.platform === 'win32',
+          windowsHide: true,
+        });
+      } catch (err) {
+        return resolve({ status: null, error: err.message });
+      }
+
+      let settled = false;
+      let timer = null;
+      const finish = (status, error) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        resolve({ status, error });
+      };
+
+      if (opts.timeoutMs > 0) {
+        timer = setTimeout(() => {
+          // 结束整个进程树：Windows 下 shell:true 时 child 是 cmd.exe，需 taskkill /T
+          if (child.pid) {
+            if (process.platform === 'win32') {
+              try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch { /* 忽略 */ }
+            } else {
+              try { process.kill(child.pid, 'SIGTERM'); } catch { /* 忽略 */ }
+            }
+          }
+          finish(null, `命令超时（${opts.timeoutMs}ms）：${cmd} ${(args ?? []).join(' ')}`);
+        }, opts.timeoutMs);
+      }
+
+      child.on('error', (err) => finish(null, err.message));
+      child.on('close', (code) => finish(code ?? 0, undefined));
     });
-    return { status: result.status ?? (result.error ? null : 0), error: result.error ? result.error.message : undefined };
   }
 
   async download(url, destAbs) {

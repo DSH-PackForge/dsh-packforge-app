@@ -10,7 +10,10 @@ contextBridge.exposeInMainWorld('packforge', {
   listDshVersions: () => ipcRenderer.invoke('dsh:versions'),
   exportPack: (opts) => ipcRenderer.invoke('profiles:export', opts),
   exportRepo: (opts) => ipcRenderer.invoke('profiles:exportRepo', opts),
+  listHomes: () => ipcRenderer.invoke('home:list'),
+  exportHome: (opts) => ipcRenderer.invoke('home:export', opts),
   installPack: (opts) => ipcRenderer.invoke('pack:install', opts),
+  onInstallProgress: (cb) => ipcRenderer.on('pack:install-progress', (_e, p) => cb(p)),
   marketList: (source) => ipcRenderer.invoke('market:list', source),
   onProtocolUrl: (cb) => ipcRenderer.on('protocol-url', (_e, url) => cb(url)),
 });

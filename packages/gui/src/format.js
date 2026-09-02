@@ -77,17 +77,42 @@ export function packViewHTML(r) {
 }
 
 export function manifestHTML(m) {
-  const bundles = m.bundles ?? [];
-  const deps = Object.keys(m.dependencies ?? {});
-  const files = m.files ?? [];
   const disp = typeof m.displayName === 'string' ? m.displayName : pickLocale(m.displayName, 'zh-CN', '');
-  return `
+  const head = `
   <div class="mhead">
     <h2>${escapeHtml(m.name)} <span class="muted">v${escapeHtml(String(m.version))}</span></h2>
     ${disp ? `<div class="muted">${escapeHtml(disp)}</div>` : ''}
-  </div>
+  </div>`;
+
+  if (m.type === 'dshhome') {
+    const profiles = Object.entries(m.profiles ?? {})
+      .map(([n, u]) => `${escapeHtml(n)}（${(u.bundles ?? []).length} bundles）`).join(', ');
+    const presets = Object.keys(m.presets ?? {}).map(escapeHtml).join(', ');
+    const skills = (m.skills ?? []).map((s) => escapeHtml(s.path)).join(', ');
+    return `
+  ${head}
   <table class="kv">
-    <tr><td>类型</td><td>${escapeHtml(m.type ?? '')}</td></tr>
+    <tr><td>类型</td><td>dshhome（整个 DSH_HOME）</td></tr>
+    <tr><td>dsh 版本</td><td>${escapeHtml(m.dshVersion ?? '未钉定')}</td></tr>
+    <tr><td>作者</td><td>${escapeHtml(m.author ?? '')}</td></tr>
+    <tr><td>默认 Profile</td><td>${escapeHtml(m.defaultProfile ?? '')}</td></tr>
+    <tr><td>Profiles</td><td>${profiles || '<span class="muted">无</span>'}</td></tr>
+    <tr><td>Presets</td><td>${presets || '<span class="muted">无</span>'}</td></tr>
+    <tr><td>Skills</td><td>${skills || '<span class="muted">无</span>'}</td></tr>
+    <tr><td>指令</td><td>${escapeHtml(m.instructions ?? '')}</td></tr>
+    <tr><td>重内容</td><td>${(m.files ?? []).length} 个 files[] 条目</td></tr>
+  </table>
+  ${typeof m.description === 'string' && m.description ? `<p class="desc">${escapeHtml(m.description)}</p>` : ''}
+  `.trim();
+  }
+
+  const bundles = m.bundles ?? [];
+  const deps = Object.keys(m.dependencies ?? {});
+  const files = m.files ?? [];
+  return `
+  ${head}
+  <table class="kv">
+    <tr><td>类型</td><td>${escapeHtml(m.type ?? 'profile')}</td></tr>
     <tr><td>dsh 版本</td><td>${escapeHtml(m.dshVersion ?? '未钉定')}</td></tr>
     <tr><td>作者</td><td>${escapeHtml(m.author ?? '')}</td></tr>
     <tr><td>层栈</td><td>${bundles.map(escapeHtml).join(', ') || '<span class="muted">无</span>'}</td></tr>
@@ -99,10 +124,13 @@ export function manifestHTML(m) {
 }
 
 export function marketCardHTML(p) {
-  const fmt = p.format === 'dspack' ? '.dspack v4' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+  const fmt = p.type === 'dshhome'
+    ? '.dspack dshhome'
+    : p.format === 'dspack' ? '.dspack v4' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+  const size = Number(p.size) > 0 ? p.size : '';
   const action =
     p.format === 'dspack'
-      ? `<button class="card-install" data-name="${escapeHtml(p.name)}" data-url="${escapeHtml(p.downloadUrl)}" data-sha="${escapeHtml(p.sha256 ?? '')}" data-size="${p.size ?? ''}">安装</button>`
+      ? `<button class="card-install" data-name="${escapeHtml(p.name)}" data-url="${escapeHtml(p.downloadUrl)}" data-sha="${escapeHtml(p.sha256 ?? '')}" data-size="${size}">安装</button>`
       : '<span class="muted">旧格式，暂不支持安装</span>';
   return `
   <article class="card ${p.format === 'dspack' ? '' : 'stale'}" data-name="${escapeHtml(p.name)}">

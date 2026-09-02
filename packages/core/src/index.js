@@ -5,6 +5,7 @@ export { scanProfile, selectFiles } from './scan.js';
 export { summarizeSpecial } from './special.js';
 export {
   buildManifest,
+  buildHomeManifest,
   validateManifest,
   validateFileEntry,
   coordsToPkgDeps,
@@ -22,15 +23,16 @@ export {
 } from './manifest.js';
 export {
   discoverProfiles,
+  discoverHomes,
   listInstalledDshVersions,
   resolveProfileInput,
   skipProfileDir,
   compareVersions,
   sortVersionsDesc,
 } from './discovery.js';
-export { buildDspack, parseDspack, encodeText, decodeText } from './dspack.js';
-export { packProfile, dspackEntryPath } from './pack.js';
+export { buildDspack, parseDspack, encodeText, decodeText, dspackMarker, DSPACK_FORMAT, DSPACK_CONTAINER_VERSION } from './dspack.js';
+export { packProfile, packHome, dspackEntryPath, summarizeHome } from './pack.js';
 export { exportRepo, renderReadme, renderDspackIgnore, REPO_CONTENT_LEVELS, REPO_CONTENT_LABEL } from './repo.js';
-export { inspectProfile, inspectPack } from './inspect.js';
+export { inspectProfile, inspectHome, inspectPack } from './inspect.js';
 export { installPack, verifyIntegrity, reconcileProfile, resolvePackSource } from './install.js';
 export { readMarketIndex, normalizeMarketPack, DEFAULT_MARKET_INDEX } from './market.js';

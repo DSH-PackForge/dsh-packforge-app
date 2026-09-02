@@ -100,7 +100,47 @@ test('dry-run 不写任何文件', async () => {
 
     const r = await installPack(host, { source: p, profilesRoot, dryRun: true });
     assert.equal(r.dryRun, true);
+    assert.equal(r.exists, false);
     assert.equal(await host.stat(r.dir), null);
+  } finally {
+    await host.rm(root, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('dry-run 遇同名 profile 不报错，返回 exists=true', async () => {
+  const host = new NodeHost();
+  const root = await host.mkdtemp('pfx-inst-');
+  try {
+    const profilesRoot = host.joinPath(root, 'profiles');
+    await host.mkdir(profilesRoot);
+    const p = host.joinPath(root, 'demo-1.0.0.dspack');
+    await host.writeFile(p, buildDspack(validEntries()));
+
+    // 先真实落盘一个同名 profile（noInstall，避免跑 pnpm）
+    await installPack(host, { source: p, profilesRoot, noInstall: true });
+
+    // 再 dry-run：应照常返回计划并标记 exists，而非抛「已存在」
+    const r = await installPack(host, { source: p, profilesRoot, dryRun: true });
+    assert.equal(r.dryRun, true);
+    assert.equal(r.exists, true);
+    assert.equal(r.profileName, 'demo');
+  } finally {
+    await host.rm(root, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('expectedSize=0（市场条目缺 size）不应误判大小', async () => {
+  const host = new NodeHost();
+  const root = await host.mkdtemp('pfx-inst-');
+  try {
+    const profilesRoot = host.joinPath(root, 'profiles');
+    await host.mkdir(profilesRoot);
+    const p = host.joinPath(root, 'demo-1.0.0.dspack');
+    await host.writeFile(p, buildDspack(validEntries()));
+
+    // 期望大小为 0（缺失）时跳过大小校验，不应抛「大小不符」
+    const r = await installPack(host, { source: p, profilesRoot, noInstall: true, expectedSize: 0 });
+    assert.equal(r.profileName, 'demo');
   } finally {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }
