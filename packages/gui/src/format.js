@@ -130,7 +130,7 @@ export function marketCardHTML(p) {
   const size = Number(p.size) > 0 ? p.size : '';
   const action =
     p.format === 'dspack'
-      ? `<button class="card-install" data-name="${escapeHtml(p.name)}" data-url="${escapeHtml(p.downloadUrl)}" data-sha="${escapeHtml(p.sha256 ?? '')}" data-size="${size}">安装</button>`
+      ? `<button class="card-install" data-name="${escapeHtml(p.name)}" data-url="${escapeHtml(p.downloadUrl)}" data-sha="${escapeHtml(p.sha256 ?? '')}" data-size="${size}">查看并安装</button>`
       : '<span class="muted">旧格式，暂不支持安装</span>';
   return `
   <article class="card ${p.format === 'dspack' ? '' : 'stale'}" data-name="${escapeHtml(p.name)}">

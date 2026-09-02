@@ -29,7 +29,17 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
 
-  ipcMain.handle('pack:view', (_e, p) => core.inspectPack(host, p));
+  ipcMain.handle('pack:view', async (_e, p) => {
+    if (/^https?:\/\//i.test(p)) {
+      const { path, tempDir } = await core.resolvePackSource(host, p);
+      try {
+        return await core.inspectPack(host, path);
+      } finally {
+        if (tempDir) await host.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+    return core.inspectPack(host, p);
+  });
   ipcMain.handle('profiles:list', () => core.discoverProfiles(host));
   ipcMain.handle('profiles:export', (_e, opts) => core.packProfile(host, opts.profile, opts));
   ipcMain.handle('profiles:exportRepo', (_e, opts) => core.exportRepo(host, opts.profile, opts));

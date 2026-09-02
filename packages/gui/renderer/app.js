@@ -55,9 +55,17 @@ async function refreshMarket(source) {
   setStatus(`市场共 ${r.packs.length} 个整合包`);
 }
 
+let pendingIntegrity = null; // 市场跳转带入的完整性校验 { source, sha, size }
+
 async function installFromMarket(btn) {
   const source = btn.dataset.url;
   if (!source) return setStatus('该条目无下载地址', 'err');
+  const size = Number(btn.dataset.size);
+  pendingIntegrity = {
+    source,
+    sha: btn.dataset.sha || undefined,
+    size: Number.isInteger(size) && size > 0 ? size : undefined,
+  };
   switchTab('pack');
   $('pack-source').value = source;
   loadPackPreview();
@@ -406,11 +414,14 @@ async function doExportHome() {
 async function doImport() {
   const source = $('pack-source').value.trim();
   if (!source) return setStatus('请先选择整合包文件', 'err');
+  const integrity = pendingIntegrity && pendingIntegrity.source === source ? pendingIntegrity : null;
   const opts = {
     source,
     name: $('import-name').value || undefined,
     profilesRoot: $('import-root').value || undefined,
     dryRun: $('import-dry').checked,
+    expectedSha256: integrity?.sha,
+    expectedSize: integrity?.size,
   };
   $('import-out').textContent = '';
   try {
@@ -434,10 +445,13 @@ function switchInstallTab(tab) {
 async function doImportHome() {
   const source = $('pack-source').value.trim();
   if (!source) return setStatus('请先选择整合包文件', 'err');
+  const integrity = pendingIntegrity && pendingIntegrity.source === source ? pendingIntegrity : null;
   const opts = {
     source,
     home: $('import-home-target').value || undefined,
     dryRun: $('import-home-dry').checked,
+    expectedSha256: integrity?.sha,
+    expectedSize: integrity?.size,
   };
   $('import-home-out').textContent = '';
   try {
