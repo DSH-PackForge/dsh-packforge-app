@@ -47,13 +47,28 @@ export async function exportRepo(host, profile, opts = {}) {
     throw new ReleaseConflictError(releasePath, manifest.name, manifest.version);
   }
 
+  // 先产 release，拿到 .dspack 校验和写进仓库根部的清单（清单在 .dspack 之外，不构成循环）；
+  // .dspack 内部的 manifest（由 packProfile 生成）不带该字段。
+  let release = null;
+  if (!(opts.replaceRelease === 'skip' && releaseExists)) {
+    const pack = await packProfile(host, profile, {
+      ...opts,
+      out: releaseDir,
+      force: opts.replaceRelease === true,
+    });
+    const shaName = `${releaseDspack}.sha256`;
+    await host.writeTextFile(host.joinPath(releaseDir, shaName), `${pack.sha256}  ${releaseDspack}\n`);
+    release = { dspack: releaseDspack, sha256: shaName, sha256Value: pack.sha256 };
+    manifest.sha256 = pack.sha256; // 顶层 sha256 = release .dspack 校验和
+  }
+
   const written = [];
   const writeText = async (name, body) => {
     await host.writeTextFile(host.joinPath(repoDir, name), body);
     written.push(name);
   };
 
-  // 1) 清单（所有档）
+  // 1) 清单（所有档；含 release sha256）
   await writeText('manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
 
   // 2) README（readme / full）
@@ -77,20 +92,7 @@ export async function exportRepo(host, profile, opts = {}) {
   // 4) .gitignore（所有档：release 产物不入版本管理）
   await writeText('.gitignore', renderGitignore());
 
-  // 5) release：.dspack + .sha256（所有档；skip 且已存在时跳过）
-  let release = null;
-  if (!(opts.replaceRelease === 'skip' && releaseExists)) {
-    const pack = await packProfile(host, profile, {
-      ...opts,
-      out: releaseDir,
-      force: opts.replaceRelease === true,
-    });
-    const shaName = `${releaseDspack}.sha256`;
-    await host.writeTextFile(host.joinPath(releaseDir, shaName), `${pack.sha256}  ${releaseDspack}\n`);
-    release = { dspack: releaseDspack, sha256: shaName, sha256Value: pack.sha256 };
-  }
-
-  // 6) git init + add + commit（容错：无 git / 无变更时降级）
+  // 5) git init + add + commit（容错：无 git / 无变更时降级）
   const git = await commitRepo(host, repoDir, manifest);
 
   return {

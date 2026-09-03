@@ -103,6 +103,10 @@ test('exportRepo：release 产出 .dspack + .sha256 且 gitignore', async () => 
     const sha = await host.readTextFile(host.joinPath(r.dir, 'release', r.release.sha256));
     assert.match(sha, /my-web-1\.2\.3\.dspack/);
 
+    // 仓库根部的清单（在 .dspack 之外）带顶层 sha256
+    const m = JSON.parse(await host.readTextFile(host.joinPath(r.dir, 'manifest.json')));
+    assert.equal(m.sha256, r.release.sha256Value);
+
     const gitignore = await host.readTextFile(host.joinPath(r.dir, '.gitignore'));
     assert.match(gitignore, /release\//);
   } finally {
