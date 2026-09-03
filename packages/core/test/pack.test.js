@@ -4,7 +4,7 @@ import { NodeHost } from '@dsh-packforge/host-node';
 import { scanProfile, packProfile } from '../src/index.js';
 import { parseDspack, decodeText } from '../src/dspack.js';
 
-test('导出：敏感过滤 + manifest v4 + overrides/ 布局 + sha256 全包', async () => {
+test('导出：敏感过滤 + manifest v5 + overrides/ 布局 + sha256 全包', async () => {
   const host = new NodeHost();
   const root = await host.mkdtemp('pfx-');
   const dir = host.joinPath(root, 'profile');
@@ -31,7 +31,7 @@ test('导出：敏感过滤 + manifest v4 + overrides/ 布局 + sha256 全包', 
 
     const result = await packProfile(host, { name: 'my-web', dir }, { out: outDir, dshVersion: '0.1.1-rc.2' });
 
-    assert.equal(result.manifest.manifestVersion, 4);
+    assert.equal(result.manifest.manifestVersion, 5);
     assert.equal(result.manifest.type, 'profile');
     assert.equal(result.manifest.dshVersion, '0.1.1-rc.2');
     assert.equal(result.manifest.dependencies['dsh-pet'], '0.2.0');

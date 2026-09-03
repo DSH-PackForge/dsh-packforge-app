@@ -36,7 +36,7 @@ test('exportRepo：manifest 档只写清单', async () => {
     assert.equal(r.readme, '');
 
     const m = JSON.parse(await host.readTextFile(host.joinPath(r.dir, 'manifest.json')));
-    assert.equal(m.manifestVersion, 4);
+    assert.equal(m.manifestVersion, 5);
     assert.equal(m.type, 'profile');
     assert.equal(m.dshVersion, '0.1.1-rc.2');
     assert.equal(m.dependencies['dsh-pet'], '0.2.0');

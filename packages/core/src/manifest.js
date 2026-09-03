@@ -1,11 +1,11 @@
-// manifest v4 契约（最新目标规范，见 DSH-PackForge/specs/manifest/v4.md）。
-// v4 = v3 全部硬约束（依赖坐标钉死精确版本/commit sha、dshVersion 精确、多语言元数据）
-//      + type（"profile" 现行 / "collection" 预留）+ files[]（重内容按需下载清单）。
+// manifest v5 契约（最新目标规范，见 DSH-PackForge/specs/manifest/v5.md）。
+// v5 = v4 全部硬约束（依赖坐标钉死精确版本/commit sha、dshVersion 精确、多语言元数据、files[]）
+//      + type 区分形态："profile"（单包）/ "dshhome"（整机，含 profiles/presets/skills/instructions）。
 
 const ICON_PATTERN = /^icons?\/.+\.(png|jpe?g|webp|ico|svg)$/i;
 
 /**
- * 从 Profile 生成 manifest v4。
+ * 从 Profile 生成 manifest v5（type: "profile"）。
  * @param {Host} host 用于读取 package.json 与 cordis.patch.yml
  * @param {{name: string, dir: string}} profile
  * @param {object} opts { name, displayName, version, description, author, icon, dshVersion, profileName, files }
@@ -18,13 +18,13 @@ export async function buildManifest(host, profile, opts = {}, scan = { files: []
   const displayName = opts.displayName || niceName(pkg?.name) || name;
   const description = opts.description ?? pkg?.description ?? '';
   const author = opts.author || (typeof pkg?.author === 'string' ? pkg.author : '') || '';
-  // v4：dshVersion 必须是精确版本号（如 0.1.1-rc.2）。导出侧由扫描器注入；缺省置空可被导入端兜底。
+  // v5：dshVersion 必须是精确版本号（如 0.1.1-rc.2）。导出侧由扫描器注入；缺省置空可被导入端兜底。
   const dshVersion = opts.dshVersion || '';
   const icon = opts.icon || findIcon(scan.files) || '';
   const patch = (await host.readTextFile(host.joinPath(profile.dir, 'cordis.patch.yml'))) ?? '';
 
   return {
-    manifestVersion: 4,
+    manifestVersion: 5,
     type: 'profile',
     name,
     version,
@@ -209,7 +209,7 @@ export function isExactSemver(v) {
 }
 
 /**
- * 生成 v4 dependencies（坐标→固定版本）：
+ * 生成 v5 dependencies（坐标→固定版本）：
  * - git 依赖：commit sha 优先取 package.json 的 `#sha`，缺则从 pnpm-lock.yaml 的 resolution.commit 补齐；
  *   都没有则标记为 `latest`（安装时跟随默认分支最新，不强制钉 sha）；
  * - npm 依赖若仍是范围（^/~ 等），读 node_modules/<name>/package.json 的实测版本钉精确。
@@ -317,9 +317,9 @@ export function parsePkgGitSpec(spec) {
  * ------------------------------------------------------------------------- */
 
 /**
- * manifest 结构校验（v4 单 profile + v5 dshhome），返回错误信息数组（空数组 = 合法）。
+ * manifest 结构校验（v5：profile 与 dshhome；v4：兼容单 profile），返回错误信息数组（空数组 = 合法）。
  * - v4：type 仅接受 'profile'（'collection' 预留报「暂未支持」）；
- * - v5：type 仅接受 'dshhome'，校验 profiles / presets / skills / instructions / defaultProfile。
+ * - v5：type 接受 'profile' 或 'dshhome'（dshhome 校验 profiles / presets / skills / instructions / defaultProfile）。
  */
 export function validateManifest(m) {
   const errors = [];
@@ -352,7 +352,7 @@ export function validateManifest(m) {
   return errors;
 }
 
-/** v4 单 profile 校验。 */
+/** 单 profile 校验（v4/v5 共用）。 */
 function validateProfile(m) {
   const errors = [];
   if (m.type !== undefined && m.type !== 'profile') {

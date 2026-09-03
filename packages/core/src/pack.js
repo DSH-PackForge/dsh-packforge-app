@@ -12,7 +12,7 @@ export function dspackEntryPath(rel) {
 }
 
 /**
- * 一键导出（单 profile）：扫描 Profile → 生成 manifest v4 → 打包 .dspack（dspack.json version 2）。
+ * 一键导出（单 profile）：扫描 Profile → 生成 manifest v5 → 打包 .dspack（dspack.json version 3）。
  * 全程只读用户 Profile 目录，在内存中拼 ZIP 后一次写盘，不落暂存清单。
  *
  * @param {Host} host

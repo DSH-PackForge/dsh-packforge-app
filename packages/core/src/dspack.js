@@ -1,6 +1,6 @@
 // .dspack 容器 = 标准 ZIP（无自定义魔数头，压缩软件可直接打开）。
 // 格式识别由根 dspack.json（容器标记）+ 根 manifest.json（manifestVersion/type）共同承担，
-// 见 DSH-PackForge/specs/pack-structure/v2.md（单 profile）与 v3.md（dshhome）。
+// 见 DSH-PackForge/specs/pack-structure/v3.md（统一覆盖 profile 与 dshhome）。
 import { zipSync, unzipSync } from 'fflate';
 
 const encoder = new TextEncoder();

@@ -4,8 +4,9 @@ DSH 整合包平台 · **图形化管理工具**（一个 monorepo，两种宿�
 
 像玩 Minecraft 整合包一样，一键导出、导入、浏览 DSH AI 智能体配置包。本项目遵循**最新规范**：
 
-- **manifest v4**（`DSH-PackForge/specs/manifest/v4.md`）：可复现层栈契约 + `type` + `files[]`
-- **pack-structure v2 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v2.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
+- **manifest v5**（`DSH-PackForge/specs/manifest/v5.md`）：可复现层栈契约 + `type`（`profile` / `dshhome`）+ `files[]`
+- **pack-structure v3 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v3.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
+- **workspace-config v1 / `.dshpkcfg`**（`specs/workspace-config/v1.md`）：导出工作区本地快照
 
 ## 包结构（pnpm workspace）
 
@@ -27,7 +28,7 @@ packages/
 
 ## 路线
 
-- [x] M0 核心引擎（`.dspack` 容器 + manifest v4 校验 + 坐标转换 + 安全过滤/扫描）
+- [x] M0 核心引擎（`.dspack` 容器 + manifest v4/v5 校验 + 坐标转换 + 安全过滤/扫描）
 - [x] M1 导出（经典 + 启动器双路径扫描、打包 `.dspack`）
 - [x] M2 导入（`.dspack` 安装闭环 + `files[]` 按需下载）
 - [x] M3 市场浏览 + Electron GUI（市场/查看整合包/导出/导入四屏）

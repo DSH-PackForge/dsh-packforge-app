@@ -1,4 +1,4 @@
-// 导出「源仓库」（v4 源形态）：把 Profile 物化为可二次开发 / 重打包的目录。
+// 导出「源仓库」（v5 源形态）：把 Profile 物化为可二次开发 / 重打包的目录。
 // 三档内容（opts.content）：
 //   - manifest：仅清单（manifest.json）
 //   - readme  ：清单 + README.md
@@ -68,8 +68,8 @@ export async function exportRepo(host, profile, opts = {}) {
 }
 
 /**
- * 生成 README.md（markdown）。描述来源为 manifest v4（displayName/description 支持 i18n map）。
- * @param {object} m manifest v4
+ * 生成 README.md（markdown）。描述来源为 manifest v5（displayName/description 支持 i18n map）。
+ * @param {object} m manifest v5
  * @param {{files:Array,excluded:Array}} scan 扫描结果（用于文件清单段落）
  */
 export function renderReadme(m, scan = { files: [], excluded: [] }) {

@@ -4,7 +4,7 @@ import { listInstalledDshVersions } from './discovery.js';
 
 /**
  * 一键安装：读取本地/URL 的 .dspack → 校验头 & manifest → 按 type 分支安装。
- * - profile（v4）：单 profile，装到 $DSH_HOME/profiles/<name>（现有语义，假设 DSH 已装）；
+ * - profile（v5）：单 profile，装到 $DSH_HOME/profiles/<name>（现有语义，假设 DSH 已装）；
  * - dshhome（v5）：整个 DSH_HOME 快照，顺序为「先确保 dshVersion 已装 → 建 home →
  *   逐 profile install → home 级资源 → files[]/skills[] 下载」。任一环节失败整体回滚。
  *
@@ -55,7 +55,7 @@ export async function installPack(host, opts = {}) {
   }
 }
 
-/** 单 profile（v4）安装：现有语义，装到 profilesRoot/<name>。 */
+/** 单 profile（v5）安装：现有语义，装到 profilesRoot/<name>。 */
 async function installProfile(host, manifest, entries, opts, progress, profilesRoot) {
   const profileName = sanitizeSlug(opts.name || manifest.profileName || manifest.name);
   if (!profileName) throw new Error('无法确定 Profile 名称');
@@ -306,7 +306,7 @@ async function pnpmInstall(host, target, opts, frozen) {
   if (frozen) args.push('--frozen-lockfile');
   if (opts.registry) args.push('--registry', opts.registry);
   let r = await host.exec('pnpm', args, { cwd: target, timeoutMs });
-  // frozen-lockfile 失配时回退普通安装（v3/v4 导入语义）
+  // frozen-lockfile 失配时回退普通安装（v4/v5 导入语义）
   if (frozen && r.status !== 0) {
     r = await host.exec('pnpm', ['install', ...(opts.registry ? ['--registry', opts.registry] : [])], { cwd: target, timeoutMs });
   }
@@ -350,7 +350,7 @@ async function downloadFiles(host, target, files) {
 }
 
 /**
- * 安装后对账（v4 沿用 DSH 语义：Bundle 唯一判据 = dsh.bundle.patch 声明存在）。
+ * 安装后对账（v4/v5 沿用 DSH 语义：Bundle 唯一判据 = dsh.bundle.patch 声明存在）。
  * 对 dshhome 的 ProfileUnit 同样适用（unit 含 bundles / dependencies）。
  * @returns {{ missing: string[], added: string[] }}
  *   - missing：层栈中「同时是依赖」的包，装完无 dsh.bundle.patch → 无效，需回滚；
