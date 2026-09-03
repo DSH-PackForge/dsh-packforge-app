@@ -18,7 +18,7 @@ import {
 
 const VERSION = '0.1.0';
 
-const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v4 + pack-structure v2）
+const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v5 + pack-structure v3）
 
 用法:
   dspack <command> [options]
@@ -421,7 +421,7 @@ async function runMarket(host, args) {
 
   log(`市场共 ${packs.length} 个整合包：`);
   for (const p of packs) {
-    const fmt = p.format === 'dspack' ? '.dspack v4' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+    const fmt = p.format === 'dspack' ? '.dspack v5' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
     log(`  ${p.displayName || p.name}  [${fmt}]  ${p.name}@${p.version}  dsh ${p.dshVersion || '?'}`);
     if (p.description) log(`    ${p.description}`);
     if (p.downloadUrl) log(`    下载  ${p.downloadUrl}${p.sha256 ? `  (sha256 ${short(p.sha256)})` : ''}`);

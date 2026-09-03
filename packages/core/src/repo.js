@@ -3,7 +3,7 @@
 //   - manifest：仅清单（manifest.json）
 //   - readme  ：清单 + README.md
 //   - full    ：全套（机器文件 + overrides/ + .dspackignore + release/）
-// 布局遵循 pack-structure v2：机器文件进根目录，其余用户文件进 overrides/。
+// 布局遵循 pack-structure v3：机器文件进根目录，其余用户文件进 overrides/。
 import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest, resolveLocale } from './manifest.js';
 import { dspackEntryPath } from './pack.js';

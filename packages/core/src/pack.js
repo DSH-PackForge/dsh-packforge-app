@@ -2,7 +2,7 @@ import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest, buildHomeManifest } from './manifest.js';
 import { buildDspack, encodeText, dspackMarker, DSPACK_CONTAINER_VERSION } from './dspack.js';
 
-// .dspack（pack-structure v2/v3）布局：根只放机器文件；其余用户文件进 overrides/。
+// .dspack（pack-structure v3）布局：根只放机器文件；其余用户文件进 overrides/。
 const ROOT_MACHINE = new Set(['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml']);
 
 /** 把扫描出的相对路径映射为归档内条目名。 */

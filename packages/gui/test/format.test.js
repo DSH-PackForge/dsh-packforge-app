@@ -8,7 +8,7 @@ const FIXTURE = {
   valid: true,
   validation: [],
   manifest: {
-    manifestVersion: 4,
+    manifestVersion: 5,
     type: 'profile',
     name: 'web',
     version: '1.0.0',
@@ -33,7 +33,7 @@ const FIXTURE = {
 test('packViewHTML：渲染校验态/manifest/tree', () => {
   const html = packViewHTML(FIXTURE);
   assert.match(html, /校验合法/);
-  assert.match(html, /manifest v4/);
+  assert.match(html, /manifest v5/);
   assert.match(html, /标准 ZIP/);
   assert.match(html, /web/);
   assert.match(html, /v1\.0\.0/);
@@ -67,7 +67,7 @@ test('marketCardHTML：格式徽章 + 展示名 + 描述', () => {
     name: 'web', displayName: '网页开发', version: '1.0.0', description: 'desc', format: 'dspack', dshVersion: '0.1.1-rc.2', size: 11172, sha256: 'abc', downloadUrl: 'https://x/web.dspack',
   });
   assert.match(html, /网页开发/);
-  assert.match(html, /\.dspack v4/);
+  assert.match(html, /\.dspack v5/);
   assert.match(html, /desc/);
   assert.match(html, /card-install/);
   assert.match(html, /data-url="https:\/\/x\/web\.dspack"/);

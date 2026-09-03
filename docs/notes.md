@@ -44,14 +44,14 @@
 
 ## 4. 进度
 
-- [x] **M0 核心引擎**：`core`（Host 契约 / security / scan / manifest v4 / .dspack / pack / inspect）
+- [x] **M0 核心引擎**：`core`（Host 契约 / security / scan / manifest v5 / .dspack / pack / inspect）
       + `host-node` + `host-dsh-plugin`(占位) + cli/gui/plugin 占位。
 - [x] **M1 导出**：`core/src/discovery.js`（双路径发现：经典 `~/.dsh/profiles` + 启动器 `config.json.homes[]`，
       按目录去重、跳过 node_modules/__temp__/点目录）+ `dshVersion` 精确钉定（启动器 `versions[]` 取最新）
       + 依赖精确版本钉定（`coordinatesFromProfileDeps` 读 node_modules）+ `cli` 门面（list/pack/inspect）。
       真实环境冒烟通过：list 出经典 8 + 启动器实例 4（去重后）；pack web → `web-1.0.0.dspack`，
       `manifestVersion=4 / dshVersion=0.1.1-rc.2 / validate=[]`（标准 ZIP 容器）。
-- [x] **M2 导入**：`core/src/install.js` 安装闭环（本地/URL → ZIP 解压 → manifest v4 校验 → overrides/ 落盘
+- [x] **M2 导入**：`core/src/install.js` 安装闭环（本地/URL → ZIP 解压 → manifest v5 校验 → overrides/ 落盘
       → package.json 重建（coordsToPkgDeps）→ pnpm install（frozen-lockfile 失配自动回退）→ files[] 下载+sha256/size
       → reconcile（bundle 缺 `dsh.bundle.patch` → 回滚；依赖带 patch → 自动补进层栈）→ 失败整目录回滚）。
       Host 契约扩 `exec`/`download`/`move`；cli 新增 `install`（--no-install/--dry-run/--force/--registry/--sha256/--size）。

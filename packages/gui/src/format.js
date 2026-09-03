@@ -126,7 +126,7 @@ export function manifestHTML(m) {
 export function marketCardHTML(p) {
   const fmt = p.type === 'dshhome'
     ? '.dspack dshhome'
-    : p.format === 'dspack' ? '.dspack v4' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+    : p.format === 'dspack' ? '.dspack v5' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
   const size = Number(p.size) > 0 ? p.size : '';
   const action =
     p.format === 'dspack'

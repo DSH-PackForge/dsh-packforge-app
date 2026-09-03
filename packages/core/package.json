@@ -2,7 +2,7 @@
   "name": "@dsh-packforge/core",
   "version": "0.1.0",
   "type": "module",
-  "description": "DSH-PackForge 核心引擎：manifest v4 + .dspack 容器（主机无关，I/O 经 Host 注入）",
+  "description": "DSH-PackForge 核心引擎：manifest v5 + .dspack 容器（主机无关，I/O 经 Host 注入）",
   "license": "MIT",
   "exports": {
     ".": "./src/index.js"
