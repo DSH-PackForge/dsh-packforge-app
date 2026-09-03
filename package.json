@@ -9,6 +9,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "build:icon": "node scripts/gen-icon.mjs",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:win": "node scripts/build-win.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }
