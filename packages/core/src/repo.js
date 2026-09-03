@@ -1,12 +1,14 @@
-// 导出「源仓库」（v5 源形态）：把 Profile 物化为可二次开发 / 重打包的目录。
-// 三档内容（opts.content）：
+// 导出「源仓库」（v5 源形态）：把 Profile 物化为可二次开发 / 重打包的 git 仓库。
+// 三档内容（opts.content，默认 readme）：
 //   - manifest：仅清单（manifest.json）
 //   - readme  ：清单 + README.md
-//   - full    ：全套（机器文件 + overrides/ + .dspackignore + release/）
+//   - full    ：全套（机器文件 + overrides/ + .dspackignore）
+// 仓库目录名 = <out>/<name>（不带版本号）；release/ 始终产出 .dspack + .sha256（gitignore 不入库）；
+// 首次 git init + commit，之后每次导出增量 commit；同版本 release 冲突抛 ReleaseConflictError。
 // 布局遵循 pack-structure v3：机器文件进根目录，其余用户文件进 overrides/。
 import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest, resolveLocale } from './manifest.js';
-import { dspackEntryPath } from './pack.js';
+import { dspackEntryPath, packProfile } from './pack.js';
 
 /** 合法内容档。 */
 export const REPO_CONTENT_LEVELS = ['manifest', 'readme', 'full'];
@@ -22,18 +24,28 @@ export const REPO_CONTENT_LABEL = {
  * 导出源仓库。
  * @param {Host} host
  * @param {{name:string,dir:string}} profile
- * @param {object} opts { out?, content?, displayName?, dshVersion?, ...其余透传 buildManifest }
- * @returns {Promise<{dir,manifest,content,written:string[],readme:string,ignored:string}>}
+ * @param {object} opts { out?, content?, replaceRelease?, displayName?, dshVersion?, ...其余透传 buildManifest/packProfile }
+ *   - replaceRelease：undefined（冲突抛 ReleaseConflictError）/ true（覆盖）/ 'skip'（跳过 release，仍 commit 源码）
+ * @returns {Promise<{dir,manifest,content,written:string[],readme:string,ignored:string,
+ *                    release?:{dspack,sha256,sha256Value},git:{initialized,committed,reason},conflicted:boolean}>}
  */
 export async function exportRepo(host, profile, opts = {}) {
-  const content = REPO_CONTENT_LEVELS.includes(opts.content) ? opts.content : 'full';
+  const content = REPO_CONTENT_LEVELS.includes(opts.content) ? opts.content : 'readme';
   const scan = await scanProfile(host, profile.dir);
   const files = selectFiles(scan.files, opts.include);
   const manifest = await buildManifest(host, profile, opts, scan);
 
   const parent = opts.out ? host.resolvePath(opts.out) : host.cwd();
-  const repoDir = host.joinPath(parent, `${manifest.name}-${manifest.version}`);
-  await host.mkdir(parent);
+  const repoDir = host.joinPath(parent, manifest.name); // 仓库名不带版本号
+  const releaseDir = host.joinPath(repoDir, 'release');
+  const releaseDspack = `${manifest.name}-${manifest.version}.dspack`;
+  const releasePath = host.joinPath(releaseDir, releaseDspack);
+  const releaseExists = (await host.stat(releasePath)) != null;
+
+  // 版本冲突：同版本 release 产物已存在且未明确「覆盖/跳过」→ 抛错交上层决定
+  if (releaseExists && opts.replaceRelease !== true && opts.replaceRelease !== 'skip') {
+    throw new ReleaseConflictError(releasePath, manifest.name, manifest.version);
+  }
 
   const written = [];
   const writeText = async (name, body) => {
@@ -48,7 +60,7 @@ export async function exportRepo(host, profile, opts = {}) {
   const readme = content === 'manifest' ? '' : renderReadme(manifest, scan);
   if (content !== 'manifest') await writeText('README.md', readme);
 
-  // 3) 全套（full）
+  // 3) 全套源码 + .dspackignore（full）
   let ignored = '';
   if (content === 'full') {
     ignored = renderDspackIgnore();
@@ -60,11 +72,75 @@ export async function exportRepo(host, profile, opts = {}) {
       await host.writeFile(host.joinPath(repoDir, ...dest.split('/')), data);
       written.push(dest);
     }
-    await host.mkdir(host.joinPath(repoDir, 'release'));
-    written.push('release/');
   }
 
-  return { dir: repoDir, manifest, content, written, readme, ignored };
+  // 4) .gitignore（所有档：release 产物不入版本管理）
+  await writeText('.gitignore', renderGitignore());
+
+  // 5) release：.dspack + .sha256（所有档；skip 且已存在时跳过）
+  let release = null;
+  if (!(opts.replaceRelease === 'skip' && releaseExists)) {
+    const pack = await packProfile(host, profile, {
+      ...opts,
+      out: releaseDir,
+      force: opts.replaceRelease === true,
+    });
+    const shaName = `${releaseDspack}.sha256`;
+    await host.writeTextFile(host.joinPath(releaseDir, shaName), `${pack.sha256}  ${releaseDspack}\n`);
+    release = { dspack: releaseDspack, sha256: shaName, sha256Value: pack.sha256 };
+  }
+
+  // 6) git init + add + commit（容错：无 git / 无变更时降级）
+  const git = await commitRepo(host, repoDir, manifest);
+
+  return {
+    dir: repoDir,
+    manifest,
+    content,
+    written,
+    readme,
+    ignored,
+    release,
+    git,
+    conflicted: releaseExists,
+  };
+}
+
+/** 版本冲突错误：release/ 已存在同版本产物。 */
+export class ReleaseConflictError extends Error {
+  constructor(file, name, version) {
+    super(`版本冲突：release/ 已存在 ${name}@${version}（${file}）`);
+    this.name = 'ReleaseConflictError';
+    this.code = 'RELEASE_CONFLICT';
+    this.file = file;
+    this.packName = name;
+    this.packVersion = version;
+  }
+}
+
+/** 生成 .gitignore（git 版本管理忽略规则：release 产物不入库）。 */
+export function renderGitignore() {
+  return '# DSH PackForge 自动生成：release/ 产物不纳入版本管理\nrelease/\n';
+}
+
+/** git init + add + commit；无 git 或提交无变更时降级（不算失败）。 */
+async function commitRepo(host, repoDir, manifest) {
+  // 无空格（Windows shell:true 下带空格的消息会被拆成多个 pathspec）
+  const message = `export:${manifest.name}@${manifest.version}`;
+  let gitOk = false;
+  try {
+    const r = await host.exec('git', ['--version'], { cwd: repoDir });
+    gitOk = r?.status === 0;
+  } catch { gitOk = false; }
+  if (!gitOk) return { initialized: false, committed: false, reason: 'git 不可用' };
+
+  const dotGit = host.joinPath(repoDir, '.git');
+  const existed = (await host.stat(dotGit)) != null;
+  if (!existed) await host.exec('git', ['init'], { cwd: repoDir });
+  await host.exec('git', ['add', '-A'], { cwd: repoDir });
+  const r = await host.exec('git', ['commit', '-m', message], { cwd: repoDir });
+  const committed = r?.status === 0;
+  return { initialized: !existed, committed, reason: committed ? '' : '无变更或提交失败' };
 }
 
 /**

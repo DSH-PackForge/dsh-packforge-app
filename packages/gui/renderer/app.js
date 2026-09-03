@@ -249,6 +249,16 @@ async function updatePreview() {
   }
 }
 
+/** 导出仓库（处理版本冲突：弹框询问替代/跳过）。返回 null 表示取消。 */
+async function exportRepoResolved(opts) {
+  let r = await bridge.exportRepo(opts);
+  if (!r?.conflict) return r;
+  const choice = await bridge.confirmRelease({ file: r.file, name: r.name, version: r.version });
+  if (choice === 'replace') return bridge.exportRepo({ ...opts, replaceRelease: true });
+  if (choice === 'skip') return bridge.exportRepo({ ...opts, replaceRelease: 'skip' });
+  return null;
+}
+
 async function doExport() {
   const repo = $('export-mode').value === 'repo';
   const p = currentProfile();
@@ -261,14 +271,20 @@ async function doExport() {
   busy.hidden = false;
   busy.textContent = repo ? '正在导出仓库…' : '正在打包…';
   result.hidden = true;
+  let cancelled = false;
   try {
     if (repo) {
-      const r = await bridge.exportRepo({
+      const r = await exportRepoResolved({
         profile: { name: p.name, dir: p.dir },
         ...exportOpts(),
         content: $('export-content').value,
         out,
       });
+      if (r == null) {
+        cancelled = true;
+        setStatus('已取消导出', '');
+        return;
+      }
       result.innerHTML = exportRepoResultHTML(r);
       result.className = 'result ok';
       setStatus(`仓库已导出：${r.dir}`, 'ok');
@@ -287,7 +303,7 @@ async function doExport() {
     result.className = 'result err';
     setStatus(e.message, 'err');
   } finally {
-    result.hidden = false;
+    if (!cancelled) result.hidden = false;
     btn.disabled = false;
     busy.hidden = true;
   }

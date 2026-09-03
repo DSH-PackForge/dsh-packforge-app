@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('packforge', {
   platform: process.platform,
   selectFile: (filters) => ipcRenderer.invoke('dialog:selectFile', filters),
   selectDir: () => ipcRenderer.invoke('dialog:selectDir'),
+  confirmRelease: (info) => ipcRenderer.invoke('dialog:confirmRelease', info),
   viewPack: (p) => ipcRenderer.invoke('pack:view', p),
   listProfiles: () => ipcRenderer.invoke('profiles:list'),
   inspectProfile: (opts) => ipcRenderer.invoke('profiles:inspect', opts),

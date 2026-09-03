@@ -30,6 +30,18 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
 
+  ipcMain.handle('dialog:confirmRelease', async (_e, info) => {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['替代', '跳过', '取消'],
+      defaultId: 0,
+      cancelId: 2,
+      message: `版本冲突：${info?.name}@${info?.version}`,
+      detail: `release/ 已存在同版本产物。是否替代？\n${info?.file ?? ''}`,
+    });
+    return response === 0 ? 'replace' : response === 1 ? 'skip' : 'cancel';
+  });
+
   ipcMain.handle('pack:view', async (_e, p) => {
     if (/^https?:\/\//i.test(p)) {
       const { path, tempDir } = await core.resolvePackSource(host, p);
@@ -43,7 +55,16 @@ function registerIpc() {
   });
   ipcMain.handle('profiles:list', () => core.discoverProfiles(host));
   ipcMain.handle('profiles:export', (_e, opts) => core.packProfile(host, opts.profile, opts));
-  ipcMain.handle('profiles:exportRepo', (_e, opts) => core.exportRepo(host, opts.profile, opts));
+  ipcMain.handle('profiles:exportRepo', async (_e, opts) => {
+    try {
+      return await core.exportRepo(host, opts.profile, opts);
+    } catch (e) {
+      if (e?.code === 'RELEASE_CONFLICT') {
+        return { conflict: true, file: e.file, name: e.packName, version: e.packVersion };
+      }
+      throw e;
+    }
+  });
   ipcMain.handle('profiles:inspect', (_e, opts) => core.inspectProfile(host, opts.profile, opts));
   ipcMain.handle('home:list', () => core.discoverHomes(host));
   ipcMain.handle('home:inspect', (_e, opts) => core.inspectHome(host, opts.home, opts));

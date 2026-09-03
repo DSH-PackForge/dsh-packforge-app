@@ -227,6 +227,12 @@ export const REPO_CONTENT_LABEL = {
 export function exportRepoResultHTML(r) {
   const label = REPO_CONTENT_LABEL[r.content] || r.content;
   const files = (r.written ?? []).map((w) => `<li class="mono">${escapeHtml(w)}</li>`).join('');
+  const release = r.release
+    ? `<tr><td>release</td><td class="mono">${escapeHtml(r.release.dspack)}<br>${escapeHtml(r.release.sha256)}</td></tr>`
+    : '';
+  const git = r.git
+    ? `<tr><td>git</td><td>${r.git.committed ? '已提交' : escapeHtml(r.git.reason || '未提交')}</td></tr>`
+    : '';
   return `
   <div class="res-title">✓ 仓库已导出</div>
   <div class="mono">${escapeHtml(r.dir)}</div>
@@ -234,6 +240,7 @@ export function exportRepoResultHTML(r) {
     <tr><td>内容</td><td>${escapeHtml(label)}</td></tr>
     <tr><td>整合包</td><td>${escapeHtml(r.manifest?.name ?? '')} v${escapeHtml(String(r.manifest?.version ?? ''))}</td></tr>
     <tr><td>写入</td><td>${(r.written ?? []).length} 项</td></tr>
+    ${release}${git}
   </table>
   ${files ? `<ul class="tree repo-written">${files}</ul>` : ''}`;
 }
