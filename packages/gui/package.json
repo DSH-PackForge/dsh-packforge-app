@@ -34,15 +34,44 @@
       "package.json"
     ],
     "win": {
+      "icon": "icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
     },
+    "fileAssociations": [
+      {
+        "ext": "dspack",
+        "name": "DSH 整合包",
+        "description": "DSH PackForge 整合包",
+        "icon": "file.ico",
+        "role": "Editor"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "DSH PackForge",
+        "schemes": [
+          "dspack"
+        ]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "build/dspack-preview",
+        "to": "dspack-preview"
+      },
+      {
+        "from": "build/sea/dspack.exe",
+        "to": "cli/dspack.exe"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "include": "installer.nsh"
     }
   }
 }

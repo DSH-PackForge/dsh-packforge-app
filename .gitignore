@@ -4,6 +4,13 @@ node_modules/
 *.tgz
 dist/
 build/
+# gui 的 build/ 是 electron-builder 构建资源目录：installer.nsh + icon 需入库，
+# 其余（SEA 中间产物 / 拷入的预览 DLL / 生成的 icon.png）为生成物，仍忽略。
+!packages/gui/build/
+packages/gui/build/*
+!packages/gui/build/installer.nsh
+!packages/gui/build/icon.ico
+!packages/gui/build/file.ico
 coverage/
 .DS_Store
 *.log

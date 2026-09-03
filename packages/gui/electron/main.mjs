@@ -121,6 +121,21 @@ function extractDspackUrl(argv) {
   return null;
 }
 
+/** 从 argv 里提取双击打开传入的本地 .dspack 文件路径（文件关联）。 */
+function extractDspackFile(argv) {
+  for (const a of argv ?? []) {
+    if (typeof a === 'string' && /\.dspack$/i.test(a) && !a.startsWith(`${PROTOCOL}://`)) {
+      return a;
+    }
+  }
+  return null;
+}
+
+/** 统一取「协议 URL 或本地文件路径」作为要打开的目标。 */
+function extractOpenTarget(argv) {
+  return extractDspackUrl(argv) || extractDspackFile(argv);
+}
+
 /** 解析 dspack://install?url=<http(s)://…>（source 作为别名）。 */
 function parseDspackUrl(raw) {
   try {
@@ -212,8 +227,8 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', (_e, argv) => {
-    const url = extractDspackUrl(argv);
-    if (url) sendProtocolUrl(url);
+    const target = extractOpenTarget(argv);
+    if (target) sendProtocolUrl(target);
   });
 
   // macOS：进程未运行时由系统唤起
@@ -225,7 +240,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     registerIpc();
     app.setAsDefaultProtocolClient(PROTOCOL);
-    pendingDspack = extractDspackUrl(process.argv);
+    pendingDspack = extractOpenTarget(process.argv);
     createWindow();
   });
 }
