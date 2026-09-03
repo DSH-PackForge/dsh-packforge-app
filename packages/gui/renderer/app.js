@@ -554,8 +554,12 @@ function applyExportCfg(cfg) {
 
 async function loadExportCfg() {
   const p = currentProfile();
-  if (!p) return;
-  try { applyExportCfg(await bridge.loadCfg(p.dir)); } catch { /* 忽略 */ }
+  if (!p) return setStatus('未选择 Profile', 'err');
+  try {
+    const cfg = await bridge.loadCfg(p.dir);
+    applyExportCfg(cfg);
+    setStatus(cfg ? '已读取保存的配置' : '无已保存的配置', cfg ? 'ok' : '');
+  } catch { setStatus('读取配置失败', 'err'); }
 }
 
 function homeCfg() {
@@ -599,8 +603,12 @@ function applyHomeCfg(cfg) {
 
 async function loadHomeCfg() {
   const h = currentHome();
-  if (!h) return;
-  try { applyHomeCfg(await bridge.loadCfg(h.dir)); } catch { /* 忽略 */ }
+  if (!h) return setStatus('未选择 DSH_HOME', 'err');
+  try {
+    const cfg = await bridge.loadCfg(h.dir);
+    applyHomeCfg(cfg);
+    setStatus(cfg ? '已读取保存的配置' : '无已保存的配置', cfg ? 'ok' : '');
+  } catch { setStatus('读取配置失败', 'err'); }
 }
 
 function saveExportCfg() {
@@ -662,6 +670,7 @@ function init() {
   });
   $('pack-source').addEventListener('change', loadPackPreview);
   $('export-go').addEventListener('click', doExport);
+  $('export-load').addEventListener('click', loadExportCfg);
   $('export-save').addEventListener('click', saveExportCfg);
   $('export-save-go').addEventListener('click', saveAndExport);
   $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
@@ -709,6 +718,7 @@ function init() {
   $('home-data').addEventListener('change', updateHomePreview);
   $('home-refresh').addEventListener('click', initExportHome);
   $('home-go').addEventListener('click', doExportHome);
+  $('home-load').addEventListener('click', loadHomeCfg);
   $('home-save').addEventListener('click', saveHomeCfg);
   $('home-save-go').addEventListener('click', saveAndExportHome);
   $('home-browse').addEventListener('click', async () => {
