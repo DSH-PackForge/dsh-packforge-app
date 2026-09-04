@@ -1,6 +1,6 @@
 {
   "name": "@dsh-packforge/host-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "DSH host 插件：给 AI agent 注册 dspack_* 工具（列表/导出/查看/安装整合包）",
   "license": "MIT",

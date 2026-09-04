@@ -1,6 +1,6 @@
 {
   "name": "@dsh-packforge/host-dsh-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "DSH-PackForge Host 的 DSH 客户端插件适配（ctx.fs/ctx.shell + WebCrypto sha256）",
   "license": "MIT",

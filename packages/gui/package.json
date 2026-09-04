@@ -1,6 +1,6 @@
 {
   "name": "@dsh-packforge/gui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
@@ -69,6 +69,7 @@
     ],
     "nsis": {
       "oneClick": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "include": "installer.nsh"

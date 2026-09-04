@@ -1,6 +1,6 @@
 {
   "name": "@dsh-packforge/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "dspack 命令行：打包/查看/安装/市场浏览 DSH 整合包（manifest v5 + .dspack）",
   "license": "MIT",

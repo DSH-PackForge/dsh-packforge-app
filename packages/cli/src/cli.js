@@ -16,7 +16,7 @@ import {
   DEFAULT_MARKET_INDEX,
 } from '@dsh-packforge/core';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v5 + pack-structure v3）
 

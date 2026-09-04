@@ -1,6 +1,6 @@
 {
   "name": "@dsh-packforge/plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "DSH 客户端插件：在 DSH Web GUI 内导出/导入/市场浏览/查看整合包（core + host-dsh-plugin）",
   "license": "MIT",
