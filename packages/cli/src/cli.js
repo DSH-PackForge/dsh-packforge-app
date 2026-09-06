@@ -5,7 +5,6 @@ import {
   discoverHomes,
   resolveProfileInput,
   listInstalledDshVersions,
-  packProfile,
   packHome,
   inspectProfile,
   inspectPack,
@@ -13,6 +12,8 @@ import {
   resolvePackSource,
   readMarketIndex,
   fetchMarketPackDetail,
+  exportFromWorkspace,
+  loadWorkspaceConfig,
   DEFAULT_MARKET_INDEX,
 } from '@dsh-packforge/core';
 
@@ -46,6 +47,8 @@ pack 选项:
   --profile-name <str>    导入时创建的 profile 名
   --out <dir>             输出目录（默认当前目录）
   --force                 覆盖已存在的输出文件
+  --repo                  导出为源仓库（git 仓库 + release 产物），而非 .dspack
+  --content <档>          仓库内容档：manifest|readme|full（仅 --repo）
 
 inspect 选项:
   --json                  以 JSON 输出 manifest 预览
@@ -246,6 +249,8 @@ async function runPack(host, args) {
       'profile-name': { type: 'string' },
       out: { type: 'string' },
       force: { type: 'boolean' },
+      repo: { type: 'boolean' },
+      content: { type: 'string' },
     },
     args,
   );
@@ -253,13 +258,15 @@ async function runPack(host, args) {
   const profile = await resolveProfileInput(host, positionals[0]);
   if (!profile) throw new Error(`找不到 Profile「${positionals[0] ?? ''}」。${profileHint(await discoverProfiles(host))}`);
 
+  // dshVersion 优先级：--dsh-version > .dshpkcfg > 最新已装
   let dshVersion = values['dsh-version'];
+  if (!dshVersion) dshVersion = (await loadWorkspaceConfig(host, profile.dir))?.dshVersion || '';
   if (!dshVersion) {
     const versions = await listInstalledDshVersions(host);
     dshVersion = versions[0] || '';
   }
 
-  const result = await packProfile(host, profile, {
+  const result = await exportFromWorkspace(host, profile, {
     name: values.name,
     displayName: values['display-name'],
     version: values.version,
@@ -270,20 +277,31 @@ async function runPack(host, args) {
     profileName: values['profile-name'],
     out: values.out,
     force: values.force,
+    content: values.content,
+    mode: values.repo ? 'repo' : undefined,
   });
 
-  const m = result.manifest;
-  log('✓ 整合包导出完成');
-  log(`  Profile  : ${profile.name} (${profile.dir})`);
-  log(`  名称     : ${m.name}`);
-  log(`  展示名   : ${renderLocale(m.displayName)}`);
-  log(`  版本     : ${m.version}`);
-  log(`  dsh 版本 : ${m.dshVersion || '（未钉定）'}`);
-  log(`  层栈     : ${m.bundles.length} 个 bundle`);
-  log(`  依赖     : ${Object.keys(m.dependencies ?? {}).length} 个`);
-  log(`  包含文件 : ${result.included}（排除 ${result.excluded}）`);
-  log(`  输出     : ${result.output} (${formatBytes(result.size)})`);
-  log(`  SHA-256  : ${result.sha256}`);
+  if (result.output) {
+    const m = result.manifest;
+    log('✓ 整合包导出完成');
+    log(`  Profile  : ${profile.name} (${profile.dir})`);
+    log(`  名称     : ${m.name}`);
+    log(`  展示名   : ${renderLocale(m.displayName)}`);
+    log(`  版本     : ${m.version}`);
+    log(`  dsh 版本 : ${m.dshVersion || '（未钉定）'}`);
+    log(`  层栈     : ${m.bundles.length} 个 bundle`);
+    log(`  依赖     : ${Object.keys(m.dependencies ?? {}).length} 个`);
+    log(`  包含文件 : ${result.included}（排除 ${result.excluded}）`);
+    log(`  输出     : ${result.output} (${formatBytes(result.size)})`);
+    log(`  SHA-256  : ${result.sha256}`);
+  } else {
+    log('✓ 仓库导出完成');
+    log(`  目录     : ${result.dir}`);
+    log(`  内容档   : ${result.content}`);
+    log(`  写入     : ${result.written.length} 项`);
+    if (result.release) log(`  release  : ${result.release.dspack} + ${result.release.sha256}`);
+    if (result.git) log(`  git      : ${result.git.committed ? '已提交' : (result.git.reason || '未提交')}`);
+  }
 }
 
 async function runInspect(host, args) {

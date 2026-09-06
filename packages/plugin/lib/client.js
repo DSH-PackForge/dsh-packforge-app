@@ -94,18 +94,34 @@
   function validateManifest(m) {
     const errors = [];
     if (!m || typeof m !== "object" || Array.isArray(m)) return ["manifest.json \u7F3A\u5931\u6216\u4E0D\u662F\u5BF9\u8C61"];
-    if (m.manifestVersion !== 4) {
+    if (m.manifestVersion !== 4 && m.manifestVersion !== 5) {
       if (m.manifestVersion === 3 || m.manifestVersion === 2) {
-        errors.push(`manifestVersion \u4E3A ${m.manifestVersion}\uFF08\u65E7\u7248 .tgz \u683C\u5F0F\uFF09\uFF0C\u672C\u5DE5\u5177\u4EC5\u5B89\u88C5 v4(.dspack) \u6574\u5408\u5305`);
+        errors.push(`manifestVersion \u4E3A ${m.manifestVersion}\uFF08\u65E7\u7248 .tgz \u683C\u5F0F\uFF09\uFF0C\u672C\u5DE5\u5177\u4EC5\u5B89\u88C5 v4/v5(.dspack) \u6574\u5408\u5305`);
       } else {
-        errors.push("manifestVersion \u5FC5\u987B\u4E3A 4");
+        errors.push("manifestVersion \u5FC5\u987B\u4E3A 4 \u6216 5");
       }
-    }
-    if (m.type !== void 0 && m.type !== "profile") {
-      errors.push('type \u4EC5\u652F\u6301 "profile"\uFF08collection \u4E3A\u9884\u7559\u503C\uFF0C\u6682\u672A\u652F\u6301\uFF09');
     }
     if (typeof m.name !== "string" || !m.name.trim()) errors.push("manifest.name \u7F3A\u5931\u6216\u4E3A\u7A7A");
     if (typeof m.version !== "string" || !m.version.trim()) errors.push("manifest.version \u7F3A\u5931\u6216\u4E3A\u7A7A");
+    if (m.patch !== void 0 && typeof m.patch !== "string") errors.push("manifest.patch \u5FC5\u987B\u662F\u5B57\u7B26\u4E32");
+    if (m.dshVersion !== void 0 && typeof m.dshVersion !== "string") errors.push("manifest.dshVersion \u5FC5\u987B\u662F\u5B57\u7B26\u4E32");
+    for (const f of ["displayName", "description"]) {
+      if (m[f] !== void 0 && !isLocaleString(m[f])) errors.push(`manifest.${f} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6216\u591A\u8BED\u8A00\u5BF9\u8C61`);
+    }
+    if (m.manifestVersion === 5) {
+      if (m.type === "dshhome") errors.push(...validateDshHome(m));
+      else if (m.type === void 0 || m.type === "profile") errors.push(...validateProfile(m));
+      else errors.push('type \u4EC5\u652F\u6301 "profile" \u6216 "dshhome"');
+    } else {
+      errors.push(...validateProfile(m));
+    }
+    return errors;
+  }
+  function validateProfile(m) {
+    const errors = [];
+    if (m.type !== void 0 && m.type !== "profile") {
+      errors.push('type \u4EC5\u652F\u6301 "profile"\uFF08collection \u4E3A\u9884\u7559\u503C\uFF0C\u6682\u672A\u652F\u6301\uFF09');
+    }
     if (!Array.isArray(m.bundles) || m.bundles.some((b) => typeof b !== "string")) {
       errors.push("manifest.bundles \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4");
     }
@@ -116,19 +132,81 @@
         if (typeof v !== "string" || !v) errors.push(`dependencies[${k}] \u5FC5\u987B\u662F\u300C\u5750\u6807 \u2192 \u56FA\u5B9A\u7248\u672C\u300D\u5B57\u7B26\u4E32`);
       }
     }
-    if (m.patch !== void 0 && typeof m.patch !== "string") errors.push("manifest.patch \u5FC5\u987B\u662F\u5B57\u7B26\u4E32");
-    if (m.dshVersion !== void 0 && typeof m.dshVersion !== "string") errors.push("manifest.dshVersion \u5FC5\u987B\u662F\u5B57\u7B26\u4E32");
-    for (const f of ["displayName", "description"]) {
-      if (m[f] !== void 0 && !isLocaleString(m[f])) errors.push(`manifest.${f} \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6216\u591A\u8BED\u8A00\u5BF9\u8C61`);
+    if (m.files !== void 0) errors.push(...validateFiles(m.files));
+    return errors;
+  }
+  function validateDshHome(m) {
+    const errors = [];
+    if (m.type !== void 0 && m.type !== "dshhome") {
+      errors.push('type \u4EC5\u652F\u6301 "dshhome"\uFF08\u5355 profile \u8BF7\u7528 type:"profile"\uFF09');
     }
-    if (m.files !== void 0) {
-      if (!Array.isArray(m.files)) {
-        errors.push("manifest.files \u5FC5\u987B\u662F\u6570\u7EC4");
+    if (typeof m.profiles !== "object" || m.profiles === null || Array.isArray(m.profiles)) {
+      errors.push("manifest.profiles \u5FC5\u987B\u662F\u5BF9\u8C61\uFF08name \u2192 ProfileUnit\uFF09");
+    } else {
+      const names = Object.keys(m.profiles);
+      if (names.length === 0) errors.push("manifest.profiles \u81F3\u5C11\u542B 1 \u4E2A profile");
+      for (const reserved of ["web", "headless"]) {
+        if (names.includes(reserved)) errors.push(`profiles \u4E0D\u5F97\u542B\u5B89\u88C5\u57FA\u7EBF\u6A21\u677F\u300C${reserved}\u300D`);
+      }
+      for (const [name2, u] of Object.entries(m.profiles)) {
+        if (!u || typeof u !== "object" || Array.isArray(u)) {
+          errors.push(`profiles[${name2}] \u5FC5\u987B\u662F\u5BF9\u8C61`);
+          continue;
+        }
+        if (!Array.isArray(u.bundles) || u.bundles.some((b) => typeof b !== "string")) {
+          errors.push(`profiles[${name2}].bundles \u5FC5\u987B\u662F\u5B57\u7B26\u4E32\u6570\u7EC4`);
+        }
+        if (typeof u.dependencies !== "object" || u.dependencies === null || Array.isArray(u.dependencies)) {
+          errors.push(`profiles[${name2}].dependencies \u5FC5\u987B\u662F\u5BF9\u8C61`);
+        } else {
+          for (const [k, v] of Object.entries(u.dependencies)) {
+            if (typeof v !== "string" || !v) errors.push(`profiles[${name2}].dependencies[${k}] \u5FC5\u987B\u662F\u300C\u5750\u6807 \u2192 \u56FA\u5B9A\u7248\u672C\u300D\u5B57\u7B26\u4E32`);
+          }
+        }
+        if (u.patch !== void 0 && typeof u.patch !== "string") errors.push(`profiles[${name2}].patch \u5FC5\u987B\u662F\u5B57\u7B26\u4E32`);
+      }
+      if (typeof m.defaultProfile !== "string" || !m.defaultProfile) {
+        errors.push("manifest.defaultProfile \u7F3A\u5931\u6216\u4E3A\u7A7A");
+      } else if (!names.includes(m.defaultProfile)) {
+        errors.push(`defaultProfile\u300C${m.defaultProfile}\u300D\u4E0D\u5728 profiles \u4E2D`);
+      }
+    }
+    if (m.presets !== void 0) {
+      if (typeof m.presets !== "object" || m.presets === null || Array.isArray(m.presets)) {
+        errors.push("manifest.presets \u5FC5\u987B\u662F\u5BF9\u8C61\uFF08name \u2192 PresetUnit\uFF09");
       } else {
-        m.files.forEach((f, i) => {
-          for (const e of validateFileEntry(f)) errors.push(`files[${i}] ${e}`);
+        for (const [name2, u] of Object.entries(m.presets)) {
+          if (!u || typeof u !== "object" || Array.isArray(u) || typeof u.path !== "string" || !u.path) {
+            errors.push(`presets[${name2}] \u5FC5\u987B\u662F\u542B path \u7684\u5BF9\u8C61`);
+          }
+        }
+      }
+    }
+    if (m.skills !== void 0) {
+      if (!Array.isArray(m.skills)) {
+        errors.push("manifest.skills \u5FC5\u987B\u662F\u6570\u7EC4");
+      } else {
+        m.skills.forEach((s, i) => {
+          if (!s || typeof s !== "object" || Array.isArray(s) || typeof s.path !== "string" || !s.path) {
+            errors.push(`skills[${i}] \u5FC5\u987B\u662F\u542B path \u7684\u5BF9\u8C61`);
+          }
         });
       }
+    }
+    if (m.instructions !== void 0 && (typeof m.instructions !== "string" || !m.instructions)) {
+      errors.push("manifest.instructions \u5FC5\u987B\u662F\u975E\u7A7A\u5B57\u7B26\u4E32");
+    }
+    if (m.files !== void 0) errors.push(...validateFiles(m.files));
+    return errors;
+  }
+  function validateFiles(files) {
+    const errors = [];
+    if (!Array.isArray(files)) {
+      errors.push("manifest.files \u5FC5\u987B\u662F\u6570\u7EC4");
+    } else {
+      files.forEach((f, i) => {
+        for (const e of validateFileEntry(f)) errors.push(`files[${i}] ${e}`);
+      });
     }
     return errors;
   }
@@ -635,15 +713,32 @@
   // ../core/src/dspack.js
   var encoder = new TextEncoder();
   var decoder = new TextDecoder();
+  var DSPACK_FORMAT = "dspack";
   function parseDspack(bytes) {
     if (!(bytes instanceof Uint8Array) || bytes.length === 0) {
       throw new Error("\u4E0D\u662F\u6709\u6548\u7684 .dspack \u6587\u4EF6\uFF08\u7A7A\u5185\u5BB9\uFF09");
     }
+    let entries;
     try {
-      return { entries: unzipSync(bytes) };
+      entries = unzipSync(bytes);
     } catch {
       throw new Error("\u4E0D\u662F\u6709\u6548\u7684 .dspack \u6587\u4EF6\uFF08\u65E0\u6CD5\u6309 ZIP \u89E3\u538B\uFF09");
     }
+    return { entries, marker: parseMarker(entries) };
+  }
+  function parseMarker(entries) {
+    const raw = entries["dspack.json"];
+    if (!raw) return null;
+    let m;
+    try {
+      m = JSON.parse(decodeText(raw));
+    } catch {
+      throw new Error("dspack.json \u4E0D\u662F\u6709\u6548 JSON");
+    }
+    if (!m || typeof m !== "object" || Array.isArray(m) || m.format !== DSPACK_FORMAT) {
+      throw new Error('dspack.json \u4E0D\u662F\u6709\u6548\u7684\u5BB9\u5668\u6807\u8BB0\uFF08format \u5FC5\u987B\u4E3A "dspack"\uFF09');
+    }
+    return m;
   }
   function decodeText(u82) {
     return decoder.decode(u82);
@@ -653,7 +748,7 @@
   async function inspectPack(host, source) {
     const bytes = source instanceof Uint8Array ? source : await host.readFile(host.resolvePath(source));
     if (!bytes) throw new Error("\u65E0\u6CD5\u8BFB\u53D6\u6574\u5408\u5305\u6587\u4EF6");
-    const { entries } = parseDspack(bytes);
+    const { entries, marker } = parseDspack(bytes);
     let manifest = null;
     let validation;
     if (entries["manifest.json"]) {
@@ -664,27 +759,32 @@
     }
     const machine = [];
     const overrides = [];
+    const home = [];
     const other = [];
     for (const [p, data] of Object.entries(entries)) {
       if (p === "manifest.json") continue;
       const size = data?.byteLength ?? data?.length ?? 0;
       const rec = { path: p, size };
-      if (p === "package.json" || p === "pnpm-workspace.yaml" || p === "pnpm-lock.yaml") machine.push(rec);
+      if (p === "dspack.json" || p === "package.json" || p === "pnpm-workspace.yaml" || p === "pnpm-lock.yaml") machine.push(rec);
       else if (p.startsWith("overrides/")) overrides.push(rec);
+      else if (p.startsWith("home/")) home.push(rec);
       else other.push(rec);
     }
     const byPath = (a, b) => a.path.localeCompare(b.path);
     machine.sort(byPath);
     overrides.sort(byPath);
+    home.sort(byPath);
     other.sort(byPath);
     return {
       sha256: await host.sha256(bytes),
       size: bytes.byteLength,
+      containerVersion: marker?.version ?? null,
       valid: validation.length === 0,
       validation,
       manifest,
       machine,
       overrides,
+      home,
       other,
       totalEntries: Object.keys(entries).length
     };
@@ -805,7 +905,7 @@
       nav: "\u6574\u5408\u5305",
       title: "\u6574\u5408\u5305",
       intro: "\u7BA1\u7406 DSH \u6574\u5408\u5305\uFF08.dspack\uFF09\u3002\u5BFC\u51FA/\u5BFC\u5165/\u5E02\u573A\u5728 host \u4FA7\u7ECF dspack CLI \u5B8C\u6210\uFF0C\u5C31\u5730\u67E5\u770B\u8D70\u6D4F\u89C8\u5668\u5185\u89E3\u6790\u3002",
-      "action.list": "\u5217\u51FA Profile",
+      "action.export": "\u5BFC\u51FA",
       "action.market": "\u6D4F\u89C8\u5E02\u573A",
       note: "\u5B8C\u6574\u5BFC\u51FA/\u5BFC\u5165\u4E5F\u53EF\u76F4\u63A5\u5BF9 AI \u8BF4\uFF08\u7531 dspack_export / dspack_install \u5DE5\u5177\u63A5\u7BA1\uFF09\u3002"
     },
@@ -813,7 +913,7 @@
       nav: "Modpacks",
       title: "Modpacks",
       intro: "Manage DSH integration packs (.dspack). Export/import/market run on the host via the dspack CLI.",
-      "action.list": "List profiles",
+      "action.export": "Export",
       "action.market": "Browse market",
       note: "You can also ask the AI directly to export or install a pack."
     }
@@ -847,7 +947,7 @@
     const api = packforge?.api;
     const shell = typeof api?.shell === "function" ? api.shell : null;
     const actions = [
-      { label: t("action.list"), run: () => shell(["list"]) },
+      { label: t("action.export"), run: () => shell(["pack"]) },
       { label: t("action.market"), run: () => shell(["market"]) }
     ];
     const style = {

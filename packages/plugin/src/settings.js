@@ -14,7 +14,7 @@ const dict = {
     nav: '整合包',
     title: '整合包',
     intro: '管理 DSH 整合包（.dspack）。导出/导入/市场在 host 侧经 dspack CLI 完成，就地查看走浏览器内解析。',
-    'action.list': '列出 Profile',
+    'action.export': '导出',
     'action.market': '浏览市场',
     note: '完整导出/导入也可直接对 AI 说（由 dspack_export / dspack_install 工具接管）。',
   },
@@ -22,7 +22,7 @@ const dict = {
     nav: 'Modpacks',
     title: 'Modpacks',
     intro: 'Manage DSH integration packs (.dspack). Export/import/market run on the host via the dspack CLI.',
-    'action.list': 'List profiles',
+    'action.export': 'Export',
     'action.market': 'Browse market',
     note: 'You can also ask the AI directly to export or install a pack.',
   },
@@ -68,7 +68,7 @@ export function DspackSection({ t, packforge }) {
   const shell = typeof api?.shell === 'function' ? api.shell : null;
 
   const actions = [
-    { label: t('action.list'), run: () => shell(['list']) },
+    { label: t('action.export'), run: () => shell(['pack']) },
     { label: t('action.market'), run: () => shell(['market']) },
   ];
 

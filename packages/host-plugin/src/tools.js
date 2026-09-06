@@ -4,7 +4,7 @@
 import {
   discoverProfiles,
   resolveProfileInput,
-  packProfile,
+  exportFromWorkspace,
   inspectPack,
   installPack,
   resolvePackSource,
@@ -73,8 +73,9 @@ const dspackList = {
 const dspackExport = {
   name: 'dspack_export',
   description:
-    '把指定的 DSH profile 导出为 .dspack 整合包（标准 ZIP，可被压缩软件直接打开）。' +
-    'profile 用名字或目录路径；out 为输出目录（缺省当前目录）。返回输出文件路径、sha256 与大小。',
+    '把指定的 DSH profile 导出为整合包（.dspack 标准 ZIP）或源仓库（git 仓库 + release 产物）。' +
+    'profile 用名字或目录路径；缺省读取该 profile 的 .dshpkcfg 工作区配置（name/version/out/mode 等），显式参数覆盖。' +
+    'mode 为 dspack（默认）或 repo；content 为仓库内容档（仅 mode=repo）。',
   parameters: {
     type: 'object',
     additionalProperties: false,
@@ -83,8 +84,10 @@ const dspackExport = {
       out: { type: 'string', description: '输出目录，缺省为当前目录' },
       name: { type: 'string', description: '覆盖整合包 name（slug）' },
       version: { type: 'string', description: '覆盖版本号' },
-      dshVersion: { type: 'string', description: '钉定 DSH 版本（缺省取已安装最新）' },
+      dshVersion: { type: 'string', description: '钉定 DSH 版本（缺省读 .dshpkcfg，再取已安装最新）' },
       force: { type: 'boolean', description: '输出文件已存在时覆盖' },
+      mode: { type: 'string', enum: ['dspack', 'repo'], description: '导出形态，缺省读 .dshpkcfg.mode，再缺省 dspack' },
+      content: { type: 'string', enum: ['manifest', 'readme', 'full'], description: '仓库内容档（仅 mode=repo）' },
     },
     required: ['profile'],
   },
@@ -93,15 +96,21 @@ const dspackExport = {
       type: 'object',
       additionalProperties: false,
       properties: {
+        mode: { type: 'string' },
         output: { type: 'string' },
+        dir: { type: 'string' },
         sha256: { type: 'string' },
         size: { type: 'integer' },
         name: { type: 'string' },
         version: { type: 'string' },
+        content: { type: 'string' },
       },
-      required: ['output', 'sha256', 'size'],
+      required: ['mode', 'name', 'version'],
     },
-    render: (_args, v) => text(`已导出 ${v.output}（${v.size} 字节，sha256=${v.sha256}）`),
+    render: (_args, v) =>
+      v.mode === 'repo'
+        ? text(`已导出仓库 ${v.dir}（${v.name}@${v.version}，内容档 ${v.content}）`)
+        : text(`已导出 ${v.output}（${v.size} 字节，sha256=${v.sha256}）`),
   },
   execute: async (args) => {
     const host = getHost();
@@ -111,19 +120,31 @@ const dspackExport = {
       const names = profiles.map((p) => p.name).join(', ');
       throw new Error(`找不到 profile「${args.profile ?? ''}」。可用：${names || '（无）'}`);
     }
-    const r = await packProfile(host, profile, {
+    const r = await exportFromWorkspace(host, profile, {
       out: args.out,
       name: args.name,
       version: args.version,
       dshVersion: args.dshVersion,
       force: args.force === true,
+      mode: args.mode,
+      content: args.content,
     });
+    if (r.output) {
+      return {
+        mode: 'dspack',
+        output: r.output,
+        sha256: r.sha256,
+        size: r.size,
+        name: r.manifest.name,
+        version: r.manifest.version,
+      };
+    }
     return {
-      output: r.output,
-      sha256: r.sha256,
-      size: r.size,
+      mode: 'repo',
+      dir: r.dir,
       name: r.manifest.name,
       version: r.manifest.version,
+      content: r.content,
     };
   },
   presentCall: card('导出整合包'),
