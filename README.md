@@ -1,5 +1,8 @@
 # dsh-packforge-app
 
+[![整合包必备](https://dsh-packforge.github.io/dsh-pack-market/badges/plugins/DSH-PackForge-dsh-packforge-app-zh.svg)](https://dsh-packforge.github.io/dsh-pack-market/#/plugin/DSH-PackForge%2Fdsh-packforge-app)
+[![Essential for packs](https://dsh-packforge.github.io/dsh-pack-market/badges/plugins/DSH-PackForge-dsh-packforge-app-en.svg)](https://dsh-packforge.github.io/dsh-pack-market/#/plugin/DSH-PackForge%2Fdsh-packforge-app)
+
 DSH 整合包平台 · **图形化管理工具**（一个 monorepo，两种宿主：Electron 桌面端 + DSH 客户端插件）。
 
 像玩 Minecraft 整合包一样，一键导出、导入、浏览 DSH AI 智能体配置包。本项目遵循**最新规范**：
