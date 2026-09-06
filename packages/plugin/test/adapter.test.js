@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dshBridgeFromContext, viewPackBytes } from '../src/index.js';
+import { dshBridgeFromContext, viewPackBytes } from '../src/client-plugin.js';
 import { buildDspack, encodeText } from '@dsh-packforge/core';
 
 // 按 DSH 真实契约（@deepseek-ai/dsh-fs 的 FileSystem）做的最小 mock。

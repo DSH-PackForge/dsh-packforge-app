@@ -55,15 +55,6 @@ importers:
 
   packages/host-node: {}
 
-  packages/host-plugin:
-    dependencies:
-      '@dsh-packforge/core':
-        specifier: workspace:*
-        version: link:../core
-      '@dsh-packforge/host-node':
-        specifier: workspace:*
-        version: link:../host-node
-
   packages/plugin:
     dependencies:
       '@deepseek-ai/cordis':
@@ -87,6 +78,9 @@ importers:
       '@dsh-packforge/host-dsh-plugin':
         specifier: workspace:*
         version: link:../host-dsh-plugin
+      '@dsh-packforge/host-node':
+        specifier: workspace:*
+        version: link:../host-node
     devDependencies:
       esbuild:
         specifier: ^0.25.0

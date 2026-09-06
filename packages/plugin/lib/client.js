@@ -999,7 +999,7 @@
     );
   }
 
-  // src/index.js
+  // src/client-plugin.js
   var name = "dsh-packforge";
   var viewPackBytes = (bytes) => inspectPack({ readFile: async () => bytes, sha256: sha256Bytes }, bytes);
   var DSPACK_READ_CAP = 512 * 1024 * 1024;

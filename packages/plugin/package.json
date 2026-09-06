@@ -2,7 +2,7 @@
   "name": "@dsh-packforge/plugin",
   "version": "0.1.1",
   "type": "module",
-  "description": "DSH 客户端插件：在 DSH Web GUI 内导出/导入/市场浏览/查看整合包（core + host-dsh-plugin）",
+  "description": "DSH 插件（host 面 AI 工具 + client 面设置面板）：导出/导入/市场/查看整合包",
   "license": "MIT",
   "main": "src/index.js",
   "exports": {
@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "@dsh-packforge/core": "workspace:*",
-    "@dsh-packforge/host-dsh-plugin": "workspace:*"
+    "@dsh-packforge/host-dsh-plugin": "workspace:*",
+    "@dsh-packforge/host-node": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
