@@ -120,6 +120,8 @@ export async function apply(ctx) {
     viewBytes: viewPackBytes,
     // 完整导出/导入/市场/查看整合包：走 ctx.shell 委派 dspack CLI（真实文件系统 + pnpm + 下载全在 host 侧完成）。
     shell: (argv) => execViaShell(shell, 'dspack', argv),
+    // Typert Remote（client↔host 直调，不经 CLI；无 remote 时回退 shell）
+    remote: firstDefined(ctx?.remote?.dspack, ctx?.dsh?.remote?.dspack),
   };
 
   const packforge = { host, api, capabilities };

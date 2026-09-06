@@ -66,10 +66,11 @@ export function registerSettingsSection(ctx, packforge = {}) {
 export function DspackSection({ t, packforge }) {
   const api = packforge?.api;
   const shell = typeof api?.shell === 'function' ? api.shell : null;
+  const remote = api?.remote;
 
   const actions = [
-    { label: t('action.export'), run: () => shell(['pack-home']) },
-    { label: t('action.market'), run: () => shell(['market']) },
+    { label: t('action.export'), run: () => (remote ? remote.exportHome({}) : shell && shell(['pack-home'])) },
+    { label: t('action.market'), run: () => (remote ? remote.market({}) : shell && shell(['market'])) },
   ];
 
   const style = {
@@ -92,8 +93,8 @@ export function DspackSection({ t, packforge }) {
       actions.map((a) =>
         h('li', { key: a.label },
           h('button', {
-            type: 'button', style: style.btn, disabled: !shell,
-            onClick: () => { try { a.run(); } catch { /* 无 shell 或执行失败：忽略 */ } },
+            type: 'button', style: style.btn, disabled: !remote && !shell,
+            onClick: () => { try { a.run(); } catch { /* 无 shell/remote 或执行失败：忽略 */ } },
           }, a.label),
         ),
       ),

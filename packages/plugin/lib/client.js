@@ -946,9 +946,10 @@
   function DspackSection({ t, packforge }) {
     const api = packforge?.api;
     const shell = typeof api?.shell === "function" ? api.shell : null;
+    const remote = api?.remote;
     const actions = [
-      { label: t("action.export"), run: () => shell(["pack-home"]) },
-      { label: t("action.market"), run: () => shell(["market"]) }
+      { label: t("action.export"), run: () => remote ? remote.exportHome({}) : shell && shell(["pack-home"]) },
+      { label: t("action.market"), run: () => remote ? remote.market({}) : shell && shell(["market"]) }
     ];
     const style = {
       section: { display: "flex", flexDirection: "column", gap: 12, maxWidth: 720, padding: "8px 0" },
@@ -984,7 +985,7 @@
             (0, import_react.createElement)("button", {
               type: "button",
               style: style.btn,
-              disabled: !shell,
+              disabled: !remote && !shell,
               onClick: () => {
                 try {
                   a.run();
@@ -1083,7 +1084,9 @@
       // 就地查看（浏览器内）：UI 拿到 .dspack 字节流后直接解析，无需落盘。
       viewBytes: viewPackBytes,
       // 完整导出/导入/市场/查看整合包：走 ctx.shell 委派 dspack CLI（真实文件系统 + pnpm + 下载全在 host 侧完成）。
-      shell: (argv) => execViaShell(shell, "dspack", argv)
+      shell: (argv) => execViaShell(shell, "dspack", argv),
+      // Typert Remote（client↔host 直调，不经 CLI；无 remote 时回退 shell）
+      remote: firstDefined(ctx?.remote?.dspack, ctx?.dsh?.remote?.dspack)
     };
     const packforge = { host, api, capabilities };
     registerSettingsSection(ctx, packforge);

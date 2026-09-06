@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { NodeHost } from '@dsh-packforge/host-node';
-import { loadWorkspaceConfig, exportFromWorkspace } from '../src/index.js';
+import { loadWorkspaceConfig, exportFromWorkspace, exportHomeFromWorkspace } from '../src/index.js';
 
 test('loadWorkspaceConfig：读取 / 缺省 / 非法', async () => {
   const host = new NodeHost();
@@ -46,6 +46,34 @@ test('exportFromWorkspace：config 打底 + override 覆盖（dspack 路径）',
     const r2 = await exportFromWorkspace(host, { name: 'p', dir }, { out: outDir, name: 'override-name' });
     assert.equal(r2.manifest.name, 'override-name');
     assert.equal(r2.manifest.version, '2.0.0'); // version 仍取 config
+  } finally {
+    await host.rm(root, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('exportHomeFromWorkspace：读 home 配置 + exportContent→exclude', async () => {
+  const host = new NodeHost();
+  const root = await host.mkdtemp('pfx-ws-');
+  try {
+    const home = host.joinPath(root, 'home');
+    await host.mkdir(host.joinPath(home, 'profiles', 'myproj'));
+    await host.mkdir(host.joinPath(home, 'skills'));
+    await host.writeTextFile(
+      host.joinPath(home, 'profiles', 'myproj', 'package.json'),
+      JSON.stringify({ name: 'dsh-myproj', version: '1.0.0', dependencies: {}, dsh: { profile: { bundles: [] } } }),
+    );
+    await host.writeTextFile(host.joinPath(home, 'profiles', 'myproj', 'pnpm-workspace.yaml'), 'packages: []\n');
+    await host.writeTextFile(host.joinPath(home, 'skills', 'hello.md'), '# hi\n');
+    await host.writeTextFile(host.joinPath(home, 'AGENTS.md'), '# instructions\n');
+    await host.writeTextFile(
+      host.joinPath(home, '.dshpkcfg'),
+      JSON.stringify({ name: 'cfg-home', version: '2.0.0', exportContent: { skill: true, preset: true, instruction: false, data: true } }),
+    );
+
+    const r = await exportHomeFromWorkspace(host, { name: 'home', dir: home }, { out: host.joinPath(root, 'out') });
+    assert.equal(r.manifest.name, 'cfg-home');
+    assert.equal(r.manifest.version, '2.0.0');
+    assert.ok(r.output);
   } finally {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }

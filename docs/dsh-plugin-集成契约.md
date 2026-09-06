@@ -263,3 +263,27 @@ ctx.systemPrompt.section({
   bundle 标 `--external:react --external:@deepseek-ai/*`。
 - **验证**：全量 75 测试绿（core 46 + gui 11 + plugin 10 + host-dsh-plugin 3 + host-plugin 5）。
 - **坑**：`plugin` 的 bundle 测试因 react external 需用 `createRequire` 模拟 DSH 浏览器模块系统（否则 Node ESM 下顶层 `__require("react")` 抛「Dynamic require not supported」）。
+
+---
+
+## 7. client↔host 直调（Typert Remote）+ 当前实例（$DSH_HOME）
+
+> 本轮新确证，替代 §3「client 走 `ctx.shell` 委派 CLI」的第一版方案——去掉 `dspack` CLI 依赖。
+
+### 7.1 当前实例 = `$DSH_HOME`
+
+- 证据：`@deepseek-ai/dsh-home-paths`（`lib/index.js`）—— `DSH_HOME` 环境变量覆盖默认 `~/.dsh`，是 DSH 当前运行实例（home）的唯一信号；**无** `DSH_PROFILE` / `currentProfile` 概念。
+- 结论：「导出当前」= 导出 `$DSH_HOME` 指向的 home（dshhome）。`dspack pack-home` 无参时自动读它。
+
+### 7.2 Typert Remote RPC（client↔host 桥，不经 CLI）
+
+- **host 插件**：`class X extends TypertRemoteService`，`constructor(ctx, 'ns')` 自动 `bindTypertRemote` 到 Gateway；方法用 `@Remote` 装饰器标记。
+- **client 插件**：`inject: ["remote", "remote.ns"]`，`await ctx.remote.ns.method(request)` → `RemoteResult<T>`（WebSocket mux + 类型化协议 `@deepseek-ai/dsh-typert-protocol`）。
+- 范本：`@deepseek-ai/dsh-api-workspace-controller` —— host `WorkspaceController extends TypertRemoteService`；client `this.remote.create(...)` / `inject: ["remote", "remote.workspace"]`。
+- 证据：`dsh-typert-protocol/lib/types/index.d.ts`（`TypertRemoteService`/`Remote`/`bindTypertRemote`）；`dsh-api-gateway`（Gateway `invoke` 走 WebSocket mux）。
+
+### 7.3 落地方向
+
+- 设置面板「导出/浏览市场」改走 `ctx.remote.dspack.*`，不再 `ctx.shell` 跑 `dspack` CLI（消除「要求装了 CLI」的依赖）。
+- host 侧 `DspackController` 方法复用 `exportFromWorkspace`（core 共享函数：读 `.dshpkcfg` + `$DSH_HOME`，按 mode 分流 dspack/repo）。
+- 依赖：plugin 加 peer dep `@deepseek-ai/dsh-typert-protocol`；可能需要 `@deepseek-ai/dsh-typert-generator` 生成 client 类型。

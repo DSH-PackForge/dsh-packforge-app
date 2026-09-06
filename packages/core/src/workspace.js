@@ -1,6 +1,6 @@
 // 工作区配置（.dshpkcfg）：导出工作区的本地快照（规范见 specs/workspace-config/v1.md）。
 // 供 GUI / CLI / AI 工具 / DSH 插件共用的读取与「按配置导出」入口，避免各写一份 readTextFile + JSON.parse。
-import { packProfile } from './pack.js';
+import { packProfile, packHome } from './pack.js';
 import { exportRepo } from './repo.js';
 
 /** 读取某个目录下的 .dshpkcfg；不存在/非法 → null。 */
@@ -30,4 +30,30 @@ export async function exportFromWorkspace(host, profile, overrides = {}) {
     return exportRepo(host, profile, opts);
   }
   return packProfile(host, profile, opts);
+}
+
+/**
+ * 按工作区配置导出 DSH_HOME（dshhome）：config 打底、overrides 覆盖；把 exportContent 布尔开关映射为 exclude 前缀。
+ * @param {Host} host
+ * @param {{name:string,dir:string}} home
+ * @param {object} overrides 显式覆盖（CLI flag / AI 参数 / Remote 请求）
+ * @returns packHome 的结果
+ */
+export async function exportHomeFromWorkspace(host, home, overrides = {}) {
+  const cfg = (await loadWorkspaceConfig(host, home.dir)) ?? {};
+  const opts = { ...cfg };
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v !== undefined && v !== null) opts[k] = v;
+  }
+  // exportContent（{skill,preset,instruction,data}）→ exclude 前缀（未勾选即排除）
+  const ec = opts.exportContent;
+  if (ec && typeof ec === 'object') {
+    const excludes = [];
+    if (ec.skill === false) excludes.push('skills/');
+    if (ec.preset === false) excludes.push('.agent-presets/');
+    if (ec.instruction === false) excludes.push('AGENTS.md');
+    if (ec.data === false) excludes.push('data/');
+    if (excludes.length) opts.exclude = excludes;
+  }
+  return packHome(host, home, opts);
 }

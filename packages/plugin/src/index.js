@@ -8,6 +8,7 @@
 // 说明：本包代码不 import 任何 @deepseek-ai/* 模块——`ctx` 由 DSH host 运行时注入。
 // 只要 host 装载本插件且提供了 `ctx.tools`，AI 就能看到并自主调用 dspack_* 工具。
 import { dspackToolDefinitions } from './tools.js';
+import { DspackController } from './remote.js';
 
 export const name = 'dspack-host';
 
@@ -20,13 +21,18 @@ const GUIDANCE_TEXT =
   '安装新的整合包 profile 用 dspack_install。用户说「导出/打包/查看/安装整合包」时直接调用对应工具。';
 
 export function apply(ctx) {
-  if (!ctx?.tools || typeof ctx.tools.register !== 'function') return;
-
-  for (const def of dspackToolDefinitions) {
-    ctx.tools.register(def);
+  // 1) AI 工具（ctx.tools 可用时）
+  if (ctx?.tools && typeof ctx.tools.register === 'function') {
+    for (const def of dspackToolDefinitions) {
+      ctx.tools.register(def);
+    }
+    if (ctx?.systemPrompt && typeof ctx.systemPrompt.section === 'function') {
+      ctx.systemPrompt.section({ name: 'dspack:guidance', order: 150, text: GUIDANCE_TEXT });
+    }
   }
 
-  if (ctx?.systemPrompt && typeof ctx.systemPrompt.section === 'function') {
-    ctx.systemPrompt.section({ name: 'dspack:guidance', order: 150, text: GUIDANCE_TEXT });
+  // 2) Typert Remote controller（client↔host 直调导出/市场，不经 CLI）
+  if (ctx && typeof ctx.plugin === 'function') {
+    try { ctx.plugin(DspackController); } catch { /* 形态不匹配则忽略 */ }
   }
 }
