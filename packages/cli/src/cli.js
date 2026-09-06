@@ -192,6 +192,11 @@ async function runPackHome(host, args) {
     }
   }
   if (!home) {
+    // 无参时优先读 $DSH_HOME（当前运行实例）
+    const envHome = host.env('DSH_HOME');
+    if (envHome) home = { name: host.basename(envHome), dir: host.resolvePath(envHome) };
+  }
+  if (!home) {
     const homes = await discoverHomes(host);
     if (homes.length === 1) home = homes[0];
   }

@@ -947,7 +947,7 @@
     const api = packforge?.api;
     const shell = typeof api?.shell === "function" ? api.shell : null;
     const actions = [
-      { label: t("action.export"), run: () => shell(["pack"]) },
+      { label: t("action.export"), run: () => shell(["pack-home"]) },
       { label: t("action.market"), run: () => shell(["market"]) }
     ];
     const style = {
