@@ -3,7 +3,8 @@
 //
 // 契约（已从 DSH 0.1.2-alpha.5 源码确证，@deepseek-ai/dsh-skill）：
 //   - ctx.skills 是 host cordis Context 服务（SkillRegistry）。
-//   - ctx.skills.register(skill) 注册一个 runtime skill，最小必填 { name, description, content }。
+//   - ctx.skills.register(skill) 注册一个 runtime skill，必填 { name, description, source, content }。
+//     register 只给 invocation/provider 补默认；source 不补，漏了会在 load 时抛「source must be a string」。
 //   - name 须 kebab-case；同 layer 内 project > runtime > user 优先级（用户本地 skills/ 可覆盖）。
 
 /** 当前仅一个 skill：导出整合包（dspack_export 的端到端工作流指引）。 */
@@ -12,6 +13,7 @@ export const dspackSkillDefinitions = [
     name: 'export-dspack',
     description: '把 DSH profile 导出为可分享的 .dspack 整合包（含技能/预设/指令/数据）',
     whenToUse: '用户想打包、导出、分享、发布一个 DSH 整合包或 profile 时',
+    source: 'runtime',
     content: `# 导出 DSH 整合包（.dspack）
 
 目标：把一个调好的 profile 打包成单文件 .dspack（或 git 源仓库），可分发给别人一键安装。

@@ -38,6 +38,8 @@ test('skill 定义：name kebab-case + description + content', () => {
   assert.match(s.name, /^[a-z][a-z0-9-]*$/);
   assert.equal(typeof s.description, 'string');
   assert.equal(typeof s.whenToUse, 'string');
+  assert.equal(typeof s.source, 'string');
+  assert.equal(s.source, 'runtime');
   assert.equal(typeof s.content, 'string');
   assert.match(s.content, /dspack_export/);
   assert.match(s.content, /dspack_list/);
