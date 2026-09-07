@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { NodeHost } from '@dsh-packforge/host-node';
 import { apply, name, inject } from '../src/index.js';
 import { dspackToolDefinitions, dspackExport, dspackView, dspackInstall } from '../src/tools.js';
+import { dspackSkillDefinitions } from '../src/skills.js';
 
-test('exports：cordis 面 { name, inject:["tools"], apply }', () => {
+test('exports：cordis 面 { name, inject, apply }', () => {
   assert.equal(name, 'dspack-host');
-  assert.deepEqual(inject, ['tools']);
+  assert.deepEqual(inject, ['tools', 'systemPrompt', 'skills']);
   assert.equal(typeof apply, 'function');
 });
 
@@ -30,12 +31,26 @@ test('工具定义：每个都有模型面对字段 + execute', () => {
   }
 });
 
-test('apply：用 ctx.tools.register 注册全部工具 + 注入 system prompt section', () => {
+test('skill 定义：name kebab-case + description + content', () => {
+  assert.equal(dspackSkillDefinitions.length, 1);
+  const s = dspackSkillDefinitions[0];
+  assert.equal(s.name, 'export-dspack');
+  assert.match(s.name, /^[a-z][a-z0-9-]*$/);
+  assert.equal(typeof s.description, 'string');
+  assert.equal(typeof s.whenToUse, 'string');
+  assert.equal(typeof s.content, 'string');
+  assert.match(s.content, /dspack_export/);
+  assert.match(s.content, /dspack_list/);
+});
+
+test('apply：注册工具 + 注入 system prompt + 注册 skill', () => {
   const registered = [];
   const sections = [];
+  const skills = [];
   const ctx = {
     tools: { register: (d) => registered.push(d) },
     systemPrompt: { section: (s) => sections.push(s) },
+    skills: { register: (s) => skills.push(s) },
   };
   apply(ctx);
   assert.equal(registered.length, 4);
@@ -43,12 +58,16 @@ test('apply：用 ctx.tools.register 注册全部工具 + 注入 system prompt s
   assert.equal(sections[0].name, 'dspack:guidance');
   assert.equal(typeof sections[0].order, 'number');
   assert.match(sections[0].text, /dspack_export/);
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].name, 'export-dspack');
 });
 
-test('apply：无 ctx.tools / ctx.systemPrompt 时静默降级，不抛', () => {
+test('apply：无 ctx.tools / ctx.systemPrompt / ctx.skills 时静默降级，不抛', () => {
   assert.doesNotThrow(() => apply({}));
   assert.doesNotThrow(() => apply({ tools: {} }));
-  assert.doesNotThrow(() => apply({ tools: { register: () => {} } })); // 无 systemPrompt 也 OK
+  assert.doesNotThrow(() => apply({ tools: { register: () => {} } })); // 无 systemPrompt / skills 也 OK
+  assert.doesNotThrow(() => apply({ skills: {} }));
+  assert.doesNotThrow(() => apply({ skills: { register: () => {} } })); // 无 tools 也 OK
 });
 
 test('端到端：export → view → install(dryRun) 走真实 NodeHost', async () => {

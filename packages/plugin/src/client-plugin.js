@@ -20,6 +20,8 @@ import { registerSettingsSection } from './settings.js';
 
 export const name = 'dsh-packforge';
 
+export const inject = ['slots', 'locale'];
+
 export { core, createDshPluginHost, isDshBridgeSupported };
 
 // 就地查看一个 .dspack 的字节流（浏览器内，无 node:fs）。保留给 UI 层：选文件/拖入 → bytes → 这里。
@@ -34,8 +36,8 @@ const DSPACK_READ_CAP = 512 * 1024 * 1024;
  * 无 `ctx.fs` 时返回 null（插件静默停摆，不影响 DSH 本体）。
  */
 export function dshBridgeFromContext(ctx) {
-  const fs = firstDefined(ctx?.fs, ctx?.dsh?.fs);        // FileSystem 服务（真实 Context key: `fs`）
-  const shell = firstDefined(ctx?.shell, ctx?.dsh?.shell); // ShellExecutor 服务（真实 Context key: `shell`）
+  const fs = ctx?.fs;        // FileSystem 服务（真实 Context key: `fs`）
+  const shell = ctx?.shell; // ShellExecutor 服务（真实 Context key: `shell`）
   if (!fs) return null;
 
   const bridge = {
@@ -96,43 +98,96 @@ export function dshBridgeFromContext(ctx) {
  * 并给出能力面（哪些操作 ctx.fs 能承载、哪些必须 shell 委派）。
  * 无可用服务时静默停摆，不抛，避免拖垮 DSH 本体。
  */
-export async function apply(ctx) {
-  const bridge = dshBridgeFromContext(ctx);
-  const shell = firstDefined(ctx?.shell, ctx?.dsh?.shell);
-  const host = bridge && isDshBridgeSupported(bridge) ? createDshPluginHost(bridge) : null;
-
-  const capabilities = {
-    readText: !!bridge,
-    readBinary: !!bridge,
-    writeText: !!bridge,
-    stats: !!bridge,
-    listDir: !!bridge,
-    binaryWrite: false,  // ctx.fs 无 writeBytes
-    mkdir: false,
-    rm: false,
-    move: false,
-    download: false,
-    exec: !!shell,
+export function apply(ctx) {
+  // 只注册设置面板「整合包」section（slots+locale；缺失静默跳过）。
+  // 导出/浏览市场经 remote.commands 直调 host 命令（dspack-export / dspack-market）；
+  // 0.1.2-alpha.5 client 不提供 remote.dspack/fs/shell，但提供 remote.commands（通用 client↔host 动作通道）。
+  const packforge = {
+    api: {
+      viewBytes: viewPackBytes,
+      runCommand: (line) => runCommand(ctx, line),
+      readConfig: () => readConfig(ctx),
+      pickDirectory: () => pickDirectory(ctx),
+      detectDshVersion: () => detectDshVersion(ctx),
+    },
+    capabilities: {},
   };
 
-  const api = {
-    // 就地查看（浏览器内）：UI 拿到 .dspack 字节流后直接解析，无需落盘。
-    viewBytes: viewPackBytes,
-    // 完整导出/导入/市场/查看整合包：走 ctx.shell 委派 dspack CLI（真实文件系统 + pnpm + 下载全在 host 侧完成）。
-    shell: (argv) => execViaShell(shell, 'dspack', argv),
-    // Typert Remote（client↔host 直调，不经 CLI；无 remote 时回退 shell）
-    remote: firstDefined(ctx?.remote?.dspack, ctx?.dsh?.remote?.dspack),
-  };
-
-  const packforge = { host, api, capabilities };
-
-  // 需求 2：设置面板「整合包」section（运行时提供 slots+locale 服务时注册；缺失静默跳过）。
   registerSettingsSection(ctx, packforge);
 
   if (ctx && typeof ctx.provide === 'function') {
     try { ctx.provide('dsh-packforge', packforge); } catch { /* 形态不匹配则忽略 */ }
   }
-  return packforge;
+  // 不返回普通对象：cordis 把 apply 的返回值当 effect，普通对象会抛 Invalid effect。
+}
+
+/** 经 remote.commands 执行一条 host 命令（如 '/dspack-export'），返回 {ok, text|error}。 */
+async function runCommand(ctx, line) {
+  const remoteCommands = ctx?.get?.('remote.commands');
+  if (!remoteCommands || typeof remoteCommands.execute !== 'function') {
+    return { ok: false, error: '本版本 client 无 remote.commands；导出/市场请直接对 AI 说（dspack_export 工具）' };
+  }
+  const sessionId = currentSessionId(ctx);
+  if (!sessionId) return { ok: false, error: '无当前会话，请先在对话里打开一个会话' };
+  try {
+    const result = await remoteCommands.execute(sessionId, line, []);
+    if (!result?.ok) return { ok: false, error: result?.error?.message ?? '命令执行失败' };
+    const value = result.value;
+    if (value == null) return { ok: false, error: `命令 ${line} 未注册` };
+    if (value.result?.kind === 'error') return { ok: false, error: value.result.text };
+    return { ok: true, text: value.result?.text ?? '完成' };
+  } catch (e) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
+/** 从 sessions 服务取当前会话 id（可能为 undefined）。 */
+function currentSessionId(ctx) {
+  try {
+    const sessions = ctx?.get?.('sessions');
+    const snap = sessions?.list?.getSnapshot?.();
+    const cur = snap?.current;
+    if (typeof cur === 'string') return cur;
+    if (cur && typeof cur === 'object') return cur.id ?? cur.sessionId ?? cur.key;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 读取当前实例的 .dshpkcfg 配置（经 dspack-config 命令），失败返回 null。 */
+async function readConfig(ctx) {
+  const r = await runCommand(ctx, '/dspack-config');
+  if (!r?.ok) return null;
+  try {
+    const v = JSON.parse(r.text);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 打开系统目录选择器（经 remote.directoryPicker.pick），返回 { ok, path } 或 { ok:false, error }。 */
+async function pickDirectory(ctx) {
+  const dirPicker = ctx?.get?.('remote.directoryPicker');
+  if (!dirPicker || typeof dirPicker.pick !== 'function') {
+    return { ok: false, error: '无 remote.directoryPicker 服务' };
+  }
+  try {
+    const result = await dirPicker.pick();
+    if (!result?.ok) return { ok: false, error: result?.error?.message ?? '目录选择失败' };
+    if (typeof result.value === 'string') return { ok: true, path: result.value };
+    return { ok: false, error: '未选择目录（已取消）' };
+  } catch (e) {
+    return { ok: false, error: `目录选择失败：${e?.message ?? e}` };
+  }
+}
+
+/** 识别当前 DSH 版本（经 dspack-dsh-version 命令），失败返回 null。 */
+async function detectDshVersion(ctx) {
+  const r = await runCommand(ctx, '/dspack-dsh-version');
+  if (!r?.ok) return null;
+  return r.text || null;
 }
 
 // —— 内部 ——

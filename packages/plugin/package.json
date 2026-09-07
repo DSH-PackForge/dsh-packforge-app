@@ -11,9 +11,13 @@
   },
   "files": [
     "src",
-    "lib"
+    "lib",
+    "cordis.patch.yml"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -36,7 +40,7 @@
   },
   "scripts": {
     "test": "node --test --experimental-test-isolation=none \"test/*.test.js\"",
-    "bundle": "esbuild src/client.js --bundle --format=iife --platform=browser --target=es2020 --external:react --external:react/jsx-runtime --external:@deepseek-ai/* --outfile=lib/client.js"
+    "bundle": "node ../../scripts/bundle-client.mjs"
   },
   "dependencies": {
     "@dsh-packforge/core": "workspace:*",

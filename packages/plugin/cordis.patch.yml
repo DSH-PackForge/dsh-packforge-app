@@ -1,0 +1,5 @@
+# dsh-packforge bundle patch：插入 host 插件（注册 dspack_* AI 工具 + Typert Remote controller）。
+# host 面（`exports["."]`）是 cordis 插件 `{ name: "dspack-host", inject: ["tools"], apply }`。
+- insert:
+    - id: dspack-host
+      name: '@dsh-packforge/plugin'

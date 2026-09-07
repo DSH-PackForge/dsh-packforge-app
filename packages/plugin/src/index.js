@@ -8,11 +8,12 @@
 // 说明：本包代码不 import 任何 @deepseek-ai/* 模块——`ctx` 由 DSH host 运行时注入。
 // 只要 host 装载本插件且提供了 `ctx.tools`，AI 就能看到并自主调用 dspack_* 工具。
 import { dspackToolDefinitions } from './tools.js';
-import { DspackController } from './remote.js';
+import { dspackSkillDefinitions } from './skills.js';
+import { registerPackCommands } from './commands.js';
 
 export const name = 'dspack-host';
 
-export const inject = ['tools'];
+export const inject = ['tools', 'systemPrompt', 'skills'];
 
 /** 引导 AI 何时用这些工具的一段 system prompt（order 150 落在「工具引导 100–199」惯例区）。 */
 const GUIDANCE_TEXT =
@@ -31,8 +32,13 @@ export function apply(ctx) {
     }
   }
 
-  // 2) Typert Remote controller（client↔host 直调导出/市场，不经 CLI）
-  if (ctx && typeof ctx.plugin === 'function') {
-    try { ctx.plugin(DspackController); } catch { /* 形态不匹配则忽略 */ }
+  // 2) runtime skill（ctx.skills 可用时）：把「导出整合包」流程知识注册给 AI
+  if (ctx?.skills && typeof ctx.skills.register === 'function') {
+    for (const skill of dspackSkillDefinitions) {
+      ctx.skills.register(skill);
+    }
   }
+
+  // 3) host 命令（client 设置面板「导出/浏览市场」按钮经 remote.commands 直调，不经 CLI）
+  registerPackCommands(ctx);
 }
