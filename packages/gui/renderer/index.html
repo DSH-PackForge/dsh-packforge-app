@@ -156,7 +156,6 @@
             <div class="field-group switch-group">
               <div class="field-group-title">导出内容 <span class="muted">（上一级目录，可选）</span></div>
               <div class="switch-row">
-                <label class="check"><input type="checkbox" id="export-skill" checked /> Skill <span id="export-skill-count" class="muted"></span></label>
                 <label class="check"><input type="checkbox" id="export-preset" checked /> 预设 <span id="export-preset-count" class="muted"></span></label>
                 <label class="check"><input type="checkbox" id="export-instruction" /> 指令</label>
               </div>
@@ -187,7 +186,7 @@
             <div class="export-actions">
               <button id="export-load" class="ghost">读取</button>
               <button id="export-save" class="ghost">保存</button>
-              <button id="export-go" class="ghost">导出</button>
+              <button class="ghost" id="export-choices">插件与资源</button> <button id="export-go" class="ghost">导出</button>
               <button id="export-save-go" class="primary">保存并导出</button>
               <span id="export-busy" class="muted" hidden>正在打包…</span>
             </div>
@@ -239,7 +238,6 @@
             <div class="field-group switch-group">
               <div class="field-group-title">导出内容</div>
               <div class="switch-row">
-                <label class="check"><input type="checkbox" id="home-skill" checked /> Skill <span id="home-skill-count" class="muted"></span></label>
                 <label class="check"><input type="checkbox" id="home-preset" checked /> 预设 <span id="home-preset-count" class="muted"></span></label>
                 <label class="check"><input type="checkbox" id="home-instruction" checked /> 指令</label>
                 <label class="check"><input type="checkbox" id="home-data" checked /> 数据</label>
@@ -270,7 +268,7 @@
             <div class="export-actions">
               <button id="home-load" class="ghost">读取</button>
               <button id="home-save" class="ghost">保存</button>
-              <button id="home-go" class="ghost">导出</button>
+              <button class="ghost" id="home-choices">插件与资源</button> <button id="home-go" class="ghost">导出</button>
               <button id="home-save-go" class="primary">保存并导出</button>
               <span id="home-busy" class="muted" hidden>正在导出…</span>
             </div>
@@ -321,7 +319,7 @@
                   </div>
                 </div>
                 <label class="field check"><span><input type="checkbox" id="import-dry" /> 仅预览（dry-run）</span></label>
-                <div class="toolbar"><button id="import-go" class="primary">安装</button></div>
+                <div class="toolbar"><button class="ghost" id="profile-update">更新已有配置档</button> <button id="import-go" class="primary">安装</button></div>
               </div>
               <pre id="import-out" class="result"></pre>
             </div>
@@ -335,7 +333,7 @@
                   </div>
                 </div>
                 <label class="field check"><span><input type="checkbox" id="import-home-dry" /> 仅预览（dry-run）</span></label>
-                <div class="toolbar"><button id="import-home-go" class="primary">安装</button></div>
+                <div class="toolbar"><button class="ghost" id="home-update">更新已有环境</button> <button id="import-home-go" class="primary">安装</button></div>
               </div>
               <pre id="import-home-out" class="result"></pre>
             </div>

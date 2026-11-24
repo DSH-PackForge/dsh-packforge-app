@@ -74,7 +74,7 @@ test('validateManifest：v4 profile 仍接受，collection 仍拒绝', () => {
   assert.ok(validateManifest({ ...v4, type: 'collection' }).some((e) => e.includes('profile')));
 });
 
-test('packHome：识别四类单元 + 排除 web + dspack.json v3', async () => {
+test('packHome：识别四类单元 + 排除 web + dspack.json v4', async () => {
   const host = new NodeHost();
   const root = await host.mkdtemp('pfx-home-');
   try {
@@ -82,24 +82,24 @@ test('packHome：识别四类单元 + 排除 web + dspack.json v3', async () => 
     const result = await packHome(host, { name: 'default', dir: home }, { out: host.joinPath(root, 'out'), name: 'whale-studio', defaultProfile: 'whale' });
 
     const m = result.manifest;
-    assert.equal(m.manifestVersion, 5);
+    assert.equal(m.manifestVersion, 6);
     assert.equal(m.type, 'dshhome');
     assert.equal(m.defaultProfile, 'whale');
     assert.deepEqual(Object.keys(m.profiles).sort(), ['minimal', 'whale']); // web 被排除
     assert.deepEqual(Object.keys(m.presets), ['coding']);
-    assert.deepEqual(m.skills, [{ path: 'skills/whale-writer' }]);
+    assert.deepEqual(m.skills, []);
     assert.equal(m.instructions, 'AGENTS.md');
     assert.deepEqual(m.profiles.whale.bundles, ['@deepseek-ai/dsh-base', 'dsh-pet']);
     assert.equal(m.profiles.whale.dependencies['dsh-pet'], '0.2.0');
 
     const bytes = await host.readFile(result.output);
     const { entries, marker } = parseDspack(bytes);
-    assert.equal(marker.version, 3);
+    assert.equal(marker.version, 4);
     assert.equal(marker.format, 'dspack');
     assert.ok(entries['manifest.json']);
     assert.ok(entries['overrides/profiles/whale/cordis.patch.yml']);
     assert.ok(entries['overrides/.agent-presets/coding/agent.cordis.yml']);
-    assert.ok(entries['overrides/skills/whale-writer/SKILL.md']);
+    assert.equal(entries['overrides/skills/whale-writer/SKILL.md'], undefined);
     assert.ok(entries['overrides/AGENTS.md']);
     assert.equal(entries['overrides/profiles/web/package.json'], undefined); // web 不进包
   } finally {
@@ -112,7 +112,7 @@ test('installPack：dshhome 安装（noInstall）重建多 profile + home 级资
   const root = await host.mkdtemp('pfx-inst-home-');
   try {
     const home = await makeHome(host, root);
-    const packed = await packHome(host, { name: 'default', dir: home }, { name: 'whale-studio', defaultProfile: 'whale', out: host.joinPath(root, 'out2') });
+    const packed = await packHome(host, { name: 'default', dir: home }, { name: 'whale-studio', defaultProfile: 'whale', selection:{skills:['skill:home:whale-writer']}, out: host.joinPath(root, 'out2') });
     const p = host.joinPath(root, 'whale-studio-1.0.0.dspack');
     await host.writeFile(p, await host.readFile(packed.output));
 
@@ -138,7 +138,7 @@ test('installPack：dshhome 安装（noInstall）重建多 profile + home 级资
   }
 });
 
-test('buildHomeManifest：直接构造 v5（单 profile 也走 buildProfileUnit）', async () => {
+test('buildHomeManifest：直接构造 v6（单 profile 也走 buildProfileUnit）', async () => {
   const host = new NodeHost();
   const root = await host.mkdtemp('pfx-bhm-');
   try {
@@ -152,7 +152,7 @@ test('buildHomeManifest：直接构造 v5（单 profile 也走 buildProfileUnit�
     const m = await buildHomeManifest(host, { name: 'home', dir: root }, {
       name: 'ws', defaultProfile: 'p', profiles: [{ name: 'p', dir }],
     });
-    assert.equal(m.manifestVersion, 5);
+    assert.equal(m.manifestVersion, 6);
     assert.equal(m.type, 'dshhome');
     assert.equal(m.defaultProfile, 'p');
     assert.deepEqual(m.profiles.p.bundles, ['@deepseek-ai/dsh-base']);

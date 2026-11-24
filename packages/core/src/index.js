@@ -37,3 +37,5 @@ export { loadWorkspaceConfig, exportFromWorkspace, exportHomeFromWorkspace } fro
 export { inspectProfile, inspectHome, inspectPack } from './inspect.js';
 export { installPack, verifyIntegrity, reconcileProfile, resolvePackSource } from './install.js';
 export { readMarketIndex, fetchMarketPackDetail, normalizeMarketPack, packDirId, DEFAULT_MARKET_INDEX } from './market.js';
+export { discoverExtensions } from './extensions.js';
+export { exportChoices } from './inspect.js';

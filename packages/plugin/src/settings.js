@@ -5,6 +5,7 @@
 //     导航自动出现在「通用设置/模型/插件」旁边，无需改外壳。
 //   - 注册 API：ctx.slots.inject("settings.section", () => ctx.slots.register(options, Component))
 //   - 组件收到 owner props（close）+ 你 inject 返回的对象（t + packforge）。
+import { chooseExportResources } from '../../gui/renderer/v6-dialogs.js';
 import { createElement as h } from 'react';
 
 const NS = 'dspack';
@@ -124,11 +125,13 @@ export function DspackSection({ t, packforge }) {
   const detectDshVersion = packforge?.api?.detectDshVersion;
   const fields = {};
   let resultEl = null;
+  let resources = {};
 
   const ref = (key) => (el) => { fields[key] = el; };
 
   const fillForm = (cfg, refs = fields) => {
     for (const key of TEXT_FIELDS) if (refs[key]) refs[key].value = cfg[key] ?? '';
+    resources = {selection:cfg.selection, plugins:cfg.plugins};
     const ec = cfg.exportContent ?? {};
     for (const key of ['skill', 'preset', 'instruction', 'data']) {
       if (refs[key]) refs[key].checked = ec[key] !== false;
@@ -165,12 +168,21 @@ export function DspackSection({ t, packforge }) {
     if (ver && el) el.value = ver;
   };
 
+  const editResources = async () => {
+    try {
+      const result = await runCommand('/dspack-resources ' + JSON.stringify({plugins:resources.plugins}));
+      if (!result?.ok) return showResult(result);
+      const {candidates, units} = JSON.parse(result.text);
+      const selected = await chooseExportResources(candidates, units, resources);
+      if (selected) resources = selected;
+    } catch (error) { showResult({ok:false, error:error.message}); }
+  };
+
   const doSaveConfig = async () => {
     if (!runCommand) return;
-    const config = {};
+    const config = {...resources};
     for (const key of TEXT_FIELDS) config[key] = fields[key]?.value?.trim() ?? '';
     config.exportContent = {
-      skill: fields.skill?.checked ?? true,
       preset: fields.preset?.checked ?? true,
       instruction: fields.instruction?.checked ?? true,
       data: fields.data?.checked ?? true,
@@ -181,13 +193,12 @@ export function DspackSection({ t, packforge }) {
 
   const doExport = async () => {
     if (!runCommand) return;
-    const overrides = {};
+    const overrides = {...resources};
     for (const key of TEXT_FIELDS) {
       const v = fields[key]?.value?.trim();
       if (v) overrides[key] = v;
     }
     overrides.exportContent = {
-      skill: fields.skill?.checked ?? true,
       preset: fields.preset?.checked ?? true,
       instruction: fields.instruction?.checked ?? true,
       data: fields.data?.checked ?? true,
@@ -275,7 +286,7 @@ export function DspackSection({ t, packforge }) {
     ...GROUPS.map(group),
     h('div', { style: style.group },
       h('div', { style: style.groupTitle }, t('group.content')),
-      checkbox('skill'),
+      h('button', { type:'button', style:style.browseBtn, disabled:!runCommand, onClick:editResources }, '插件与资源'),
       checkbox('preset'),
       checkbox('instruction'),
       checkbox('data'),

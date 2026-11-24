@@ -8,9 +8,8 @@
 //   - client：ctx.remote.commands.execute(sessionId, '/<name>', []) → RemoteResult。
 //   - 命令名须匹配 /^[a-z][a-z0-9_-]*$/。
 //
-// 导出语义：导出「单个 profile」（type:profile），skill/preset/AGENTS.md/data 通过 packProfile 的
-// homeInclude 进 home/ 目录（安装落到 $DSH_HOME 根）——这正是 manifest v5 对 profile 包支持 home 级内容的形态。
-import { packProfile, loadWorkspaceConfig, readMarketIndex, scanProfile } from '@dsh-packforge/core';
+// 单 profile 导出通过 homeInclude 选择预设、AGENTS.md 和数据。技能由单独的资源选择写入 skill.json。
+import { packProfile, exportChoices, loadWorkspaceConfig, readMarketIndex, scanProfile } from '@dsh-packforge/core';
 import { getHost } from './host.js';
 
 /** 安装基线 / 脚手架目录，不列入可导出 profile。 */
@@ -83,8 +82,7 @@ function buildHomeInclude(homeFiles, ec) {
   const set = new Set();
   for (const f of homeFiles) {
     const rel = f.rel;
-    if (ec.skill && rel.startsWith('skills/')) set.add(rel);
-    else if (ec.preset && rel.startsWith('.agent-presets/')) set.add(rel);
+    if (ec.preset && rel.startsWith('.agent-presets/')) set.add(rel);
     else if (ec.instruction && rel === 'AGENTS.md') set.add(rel);
     else if (ec.data && rel.startsWith('data/')) set.add(rel);
   }
@@ -151,6 +149,22 @@ export function registerPackCommands(ctx) {
   });
 
   commands.register({
+    name: 'dspack-resources',
+    description: '列出当前配置档的插件描述和可选资源',
+    handler: async (invocation) => {
+      const host = getHost();
+      const dir = host.env('DSH_HOME');
+      const {profiles, current} = await listProfiles(host);
+      const name = current || profiles[0];
+      if (!dir || !name) return {kind:'error', text:'找不到当前配置档'};
+      const profile = {name, dir:host.joinPath(dir,'profiles',name)};
+      const {plugins} = parseOverrides(invocation?.rawInput);
+      const choices = await exportChoices(host, {profile, home:{dir}, plugins});
+      return {kind:'success', text:JSON.stringify(choices)};
+    },
+  });
+
+  commands.register({
     name: 'dspack-export',
     description: '导出当前 profile（含勾选的 home 级内容）为 .dspack 整合包',
     handler: async (invocation) => {
@@ -169,7 +183,8 @@ export function registerPackCommands(ctx) {
         const homeFiles = homeScan.files.filter((f) => !f.rel.startsWith('profiles/'));
         const homeInclude = buildHomeInclude(homeFiles, ec);
 
-        const opts = { ...overrides, homeInclude };
+        const cfg = await loadWorkspaceConfig(host, host.joinPath(homeDir, 'profiles', profileName));
+        const opts = { ...cfg, ...overrides, homeInclude };
         delete opts.profile;
         delete opts.exportContent;
         const profile = { name: profileName, dir: host.joinPath(homeDir, 'profiles', profileName) };

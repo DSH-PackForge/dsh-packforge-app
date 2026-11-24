@@ -7,9 +7,27 @@ DSH 整合包平台 · **图形化管理工具**（一个 monorepo，两种宿�
 
 像玩 Minecraft 整合包一样，一键导出、导入、浏览 DSH AI 智能体配置包。本项目遵循**最新规范**：
 
-- **manifest v5**（`DSH-PackForge/specs/manifest/v5.md`）：可复现层栈契约 + `type`（`profile` / `dshhome`）+ `files[]`
-- **pack-structure v3 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v3.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
+- **manifest v6**（`DSH-PackForge/specs/manifest/v6.md`）：可复现层栈契约 + `type`（`profile` / `dshhome`）+ `files[]`
+- **pack-structure v4 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v4.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
 - **workspace-config v1 / `.dshpkcfg`**（`specs/workspace-config/v1.md`）：导出工作区本地快照
+
+## 导出和更新 v6 整合包
+
+在桌面端打开导出页，选择 Profile 或 DSH_HOME，再打开「插件与资源」。插件名称和简介会从已安装插件的 locale 填入，作者可以修改名称、简介、图标和当前精确版本的 npm registry。安装器单独下载并校验该版本的 tarball，其他依赖继续使用各自的来源。
+
+插件可在包根的 `dsh_pack/paths.json` 声明额外文件，路径以 `./` 从 DSH_HOME 起算，`<profile>` 在安装时替换为目标配置档名。按项勾选路径、provider、MCP 服务器和技能。技能可以内嵌、固定到 Git 提交，或跟踪分支和标签。导入时为需要凭据的配置粘贴密钥，也可为指定目标授权复用已有凭据。留空会跳过对应项。
+
+命令行先列出资源键，再将选择保存到 JSON 文件。整机使用 `dspack resources <home> --home` 和 `dspack pack-home <home> --config <file>`。
+
+```sh
+dspack resources ./profiles/work
+dspack pack ./profiles/work --config pack-options.json --out ./release
+dspack install ./release/work-1.0.0.dspack
+dspack update ./release/work-1.1.0.dspack --dry-run
+dspack update ./release/work-1.1.0.dspack
+```
+
+更新会对比已安装基线、本地文件与新版内容。冲突默认保留本地，交互导入可按配置成员选择新版。跟踪分支的技能会在显式更新时重新解析，即使包版本号相同。旧版首次升级可同时提供 `--previous` 与 `--previous-sha256` 来重建基线。
 
 ## 包结构（pnpm workspace）
 
@@ -31,7 +49,7 @@ packages/
 
 ## 路线
 
-- [x] M0 核心引擎（`.dspack` 容器 + manifest v4/v5 校验 + 坐标转换 + 安全过滤/扫描）
+- [x] M0 核心引擎（`.dspack` 容器 + manifest v4/v5/v6 校验 + 坐标转换 + 安全过滤/扫描）
 - [x] M1 导出（经典 + 启动器双路径扫描、打包 `.dspack`）
 - [x] M2 导入（`.dspack` 安装闭环 + `files[]` 按需下载）
 - [x] M3 市场浏览 + Electron GUI（市场/查看整合包/导出/导入四屏）

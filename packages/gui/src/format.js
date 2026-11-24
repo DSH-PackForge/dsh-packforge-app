@@ -67,7 +67,7 @@ export function packViewHTML(r) {
     <span class="muted">${formatBytes(r.size)} · sha256 ${shortSha(r.sha256)}</span>
   </div>
   ${r.valid ? '' : `<ul class="errs">${r.validation.map((e) => `<li>✗ ${escapeHtml(e)}</li>`).join('')}</ul>`}
-  ${m ? manifestHTML(m) : '<p class="muted">无 manifest.json</p>'}
+  ${m ? manifestHTML(m) + resourcesHTML(m, r.icons) : '<p class="muted">无 manifest.json</p>'}
   <h3>根机器文件（${r.machine.length}）</h3>
   ${r.machine.length ? entryListHTML(r.machine) : '<p class="muted">无</p>'}
   <h3>overrides/（${r.overrides.length}）</h3>
@@ -123,10 +123,44 @@ export function manifestHTML(m) {
   `.trim();
 }
 
+function resourcesHTML(manifest, icons = {}) {
+  if (manifest.manifestVersion !== 6) return '';
+  const locale = globalThis.navigator?.language || 'zh-CN';
+  const units = manifest.type === 'dshhome' ? Object.entries(manifest.profiles || {}) : [['', manifest]];
+  const sections = [];
+  const imageTypes = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+  for (const [profile, unit] of units) {
+    const rows = Object.entries(unit?.plugins || {}).map(([id, plugin]) => {
+      let src = /^https:\/\//i.test(plugin.icon) ? plugin.icon : '';
+      const data = icons[plugin.icon];
+      const type = imageTypes[plugin.icon?.split('.').pop()?.toLowerCase()];
+      if (data instanceof Uint8Array && type) {
+        const text = Array.from(data, (n) => String.fromCharCode(n)).join('');
+        src = 'data:' + type + ';base64,' + btoa(text);
+      }
+      const icon = src ? `<img width="24" height="24" alt="" loading="lazy" referrerpolicy="no-referrer" src="${escapeHtml(src)}"> ` : '';
+      const name = pickLocale(plugin.name, locale, id);
+      const desc = pickLocale(plugin.desc, locale);
+      return `<li>${icon}<strong>${escapeHtml(name)}</strong> · <code>${escapeHtml(id)}</code> ${escapeHtml(unit.dependencies?.[id])}${desc ? ' — ' + escapeHtml(desc) : ''}${plugin.source?.registry ? ' · ' + escapeHtml(plugin.source.registry) : ''}</li>`;
+    });
+    if (rows.length) sections.push(`<h3>插件 ${escapeHtml(profile)}</h3><ul>${rows.join('')}</ul>`);
+  }
+  const labels = { 'path.json': '插件额外路径', 'provider.json': '模型提供商', 'mcp.json': 'MCP 服务器', 'skill.json': '技能' };
+  for (const [file, label] of Object.entries(labels)) {
+    const records = manifest.resources?.[file];
+    if (!Array.isArray(records) || !records.length) continue;
+    const rows = records.map((item) => '<li>' + [
+      pickLocale(item.name, locale, item.id), pickLocale(item.desc, locale), item.plugin, item.scope, item.ref, item.commit,
+    ].filter(Boolean).map(escapeHtml).join(' · ') + '</li>');
+    sections.push(`<h3>${label}</h3><ul>${rows.join('')}</ul>`);
+  }
+  return sections.join('');
+}
+
 export function marketCardHTML(p) {
   const fmt = p.type === 'dshhome'
     ? '.dspack dshhome'
-    : p.format === 'dspack' ? '.dspack v5' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+    : p.format === 'dspack' ? (Number.isInteger(p.manifestVersion) ? '.dspack · manifest v' + p.manifestVersion : '.dspack') : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
   const size = Number(p.size) > 0 ? p.size : '';
   const action =
     p.format === 'dspack'

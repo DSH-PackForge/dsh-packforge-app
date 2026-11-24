@@ -1,3 +1,5 @@
+import { managedInstall } from './managed-install.js';
+import { applyPluginSources, verifyActivePluginSources } from './registry.js';
 import { parseDspack, decodeText } from './dspack.js';
 import { validateManifest, coordsToPkgDeps, sanitizeSlug } from './manifest.js';
 import { listInstalledDshVersions } from './discovery.js';
@@ -46,6 +48,55 @@ export async function installPack(host, opts = {}) {
     const errors = validateManifest(manifest);
     if (errors.length) throw new Error(`整合包不合法：${errors.join('；')}`);
 
+    const stage = (home, authProfilesRoot) => {
+      const staged = { ...opts, home, authProfilesRoot, dryRun: false, noInstall: true, force: false };
+      const profiles = host.joinPath(home, 'profiles');
+      return manifest.type === 'dshhome'
+        ? installDshHome(host, manifest, entries, staged, progress)
+        : installProfile(host, manifest, entries, staged, progress, profiles);
+    };
+    if (manifest.manifestVersion === 6 || opts.update) {
+      return await managedInstall(host, manifest, entries, opts, {
+        stage,
+        verify: (dir, unit, verified) => verifyActivePluginSources(host, dir, unit, verified, {prepareLock:false}),
+
+        previous: async (previousHome) => {
+          if (!/^[a-f0-9]{64}$/i.test(opts.previousSha256 ?? '')) {
+            throw new Error('旧包需要可核验的 SHA-256');
+          }
+          const oldPack = await resolvePackSource(host, opts.previousSource);
+          try {
+            await verifyIntegrity(host, oldPack.path, { expectedSha256: opts.previousSha256 });
+            const old = parseDspack(await host.readFile(oldPack.path));
+            const baseline = JSON.parse(decodeText(old.entries['manifest.json']));
+            if (baseline.name !== manifest.name || (baseline.type ?? 'profile') !== (manifest.type ?? 'profile') ||
+                baseline.manifestVersion >= 6) {
+              throw new Error('用于迁移的旧包必须是同一整合包的历史格式和相同类型');
+            }
+            await installPack(host, {
+              source: oldPack.path, expectedSha256: opts.previousSha256, noInstall: true,
+              profilesRoot: host.joinPath(previousHome, 'profiles'), home: previousHome,
+              name: opts.name || manifest.profileName || manifest.name, installedDshVersions: opts.installedDshVersions,
+            });
+            return { stagedHome: previousHome, manifest: baseline, sha256: opts.previousSha256, expectedSha256: opts.previousSha256 };
+          } finally {
+            if (oldPack.tempDir) await host.rm(oldPack.tempDir, { recursive: true, force: true });
+          }
+        },
+        finalize: async ({ affectedProfiles, stagedProfiles }) => {
+          for (const dir of affectedProfiles) {
+            const pkg = JSON.parse(await host.readTextFile(host.joinPath(dir, 'package.json')));
+            const unit = manifest.type === 'dshhome' ? manifest.profiles[host.basename(dir)] : manifest;
+            await verifyActivePluginSources(host, dir, unit, host.joinPath(stagedProfiles, host.basename(dir)));
+            progress('install', '安装配置档依赖 ' + host.basename(dir));
+            await pnpmInstall(host, dir, opts, !!(await host.stat(host.joinPath(dir, 'pnpm-lock.yaml'))));
+
+            const check = await reconcileProfile(host, dir, { dependencies: pkg.dependencies, bundles: pkg.dsh?.profile?.bundles });
+            if (check.missing.length) throw new Error('无法解析插件层栈：' + check.missing.join(', '));
+          }
+        },
+      });
+    }
     if (manifest.manifestVersion === 5 && manifest.type === 'dshhome') {
       return await installDshHome(host, manifest, entries, opts, progress);
     }
@@ -78,6 +129,11 @@ async function installProfile(host, manifest, entries, opts, progress, profilesR
   try {
     progress('extract', '写入 overrides/ 与 package.json');
     await materializePackage(host, target, manifest, entries);
+    if (manifest.manifestVersion === 6) {
+      await applyPluginSources(host, target, manifest, {
+        vendored: manifest.vendored, entries, authDir: host.joinPath(opts.authProfilesRoot, profileName),
+      });
+    }
     // home/ → $DSH_HOME 根（上一级目录内容：全局 skill / 预设），与 overrides/（profile 根）并列。
     await materializeHome(host, host.joinPath(profilesRoot, '..'), entries);
 
@@ -138,6 +194,11 @@ async function installDshHome(host, manifest, entries, opts, progress) {
       const profileDir = host.joinPath(homeRoot, 'profiles', name);
       progress('extract', `写入 profile「${name}」`);
       await materializeProfile(host, profileDir, name, unit, entries);
+      if (manifest.manifestVersion === 6) {
+        await applyPluginSources(host, profileDir, unit, {
+          vendored: manifest.vendored, entries, authDir: host.joinPath(opts.authProfilesRoot, name),
+        });
+      }
 
       if (!opts.noInstall) {
         progress('install', `运行 pnpm install（${name}，可能较慢）`);

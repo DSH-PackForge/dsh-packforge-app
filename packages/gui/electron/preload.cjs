@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('packforge', {
   confirmRelease: (info) => ipcRenderer.invoke('dialog:confirmRelease', info),
   viewPack: (p) => ipcRenderer.invoke('pack:view', p),
   listProfiles: () => ipcRenderer.invoke('profiles:list'),
+  exportChoices: (opts) => ipcRenderer.invoke('export:choices', opts),
   inspectProfile: (opts) => ipcRenderer.invoke('profiles:inspect', opts),
   listDshVersions: () => ipcRenderer.invoke('dsh:versions'),
   exportPack: (opts) => ipcRenderer.invoke('profiles:export', opts),

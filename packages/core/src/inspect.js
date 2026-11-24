@@ -1,9 +1,11 @@
+import { collectPluginMetadata } from './plugin-metadata.js';
+import { collectExtensions, discoverExtensions } from './extensions.js';
 import { scanProfile, selectFiles } from './scan.js';
 import { buildManifest, buildHomeManifest } from './manifest.js';
 import { validateManifest } from './manifest.js';
 import { parseDspack, decodeText } from './dspack.js';
 import { summarizeSpecial } from './special.js';
-import { summarizeHome } from './pack.js';
+import { summarizeHome, profileHome } from './pack.js';
 
 /** 干跑检查：返回扫描结果 + manifest v5 预览 + 特殊目录摘要，不写任何文件。
  *  opts.include（rel 白名单）给定则 files/special 只取选中项，allFiles 保留全量。 */
@@ -12,8 +14,10 @@ export async function inspectProfile(host, profile, opts = {}) {
   const files = selectFiles(scan.files, opts.include);
   const manifest = await buildManifest(host, profile, opts, scan);
   // home 级候选（上一级目录）：供 GUI 勾选，勾选项打包进 home/ 目录。
-  const homeDir = opts.home || host.joinPath(profile.dir, '..', '..');
-  const homeFiles = (await scanProfile(host, homeDir)).files.filter((f) => !f.rel.startsWith('profiles/'));
+  const homeDir = profileHome(host, profile, opts.home);
+  await collectPluginMetadata(host, profile.dir, manifest, { plugins: opts.plugins, entries: {} });
+  await collectExtensions(host, { home: homeDir, profiles: [profile], manifest, entries: {}, selection: {} });
+  const homeFiles = homeDir ? (await scanProfile(host, homeDir)).files.filter((f) => !f.rel.startsWith('profiles/')) : [];
   return {
     profile,
     files,
@@ -51,6 +55,10 @@ export async function inspectHome(host, home, opts = {}) {
     instructions: summary.instructions || 'AGENTS.md',
     files: opts.files ?? [],
   });
+  for (const profile of profiles) {
+    await collectPluginMetadata(host, profile.dir, manifest.profiles[profile.name], { plugins: opts.profilePlugins?.[profile.name], entries: {} });
+  }
+  await collectExtensions(host, { home: home.dir, profiles, manifest, entries: {}, selection: {} });
   return { home, files, allFiles: scan.files, excluded: scan.excluded, manifest, summary };
 }
 
@@ -63,7 +71,7 @@ export async function inspectHome(host, home, opts = {}) {
  * @param {string|Uint8Array} source 本地 .dspack 路径或已在内存中的字节
  * @returns {Promise<{sha256,size,containerVersion,valid,validation,manifest,machine,overrides,other,totalEntries}>}
  */
-export async function inspectPack(host, source) {
+export async function inspectPack(host, source, { includeIcons = false } = {}) {
   const bytes = source instanceof Uint8Array ? source : await host.readFile(host.resolvePath(source));
   if (!bytes) throw new Error('无法读取整合包文件');
   const { entries, marker } = parseDspack(bytes);
@@ -75,6 +83,14 @@ export async function inspectPack(host, source) {
     validation = manifest ? validateManifest(manifest) : ['manifest.json 无法解析'];
   } else {
     validation = ['缺少 manifest.json'];
+  }
+
+  if (manifest?.manifestVersion === 6) {
+    for (const [path, data] of Object.entries(entries)) {
+      if (path.startsWith('extension-data/') && await host.sha256(data) !== path.split('/').pop()) {
+        validation.push('扩展文件 SHA-256 不符：' + path);
+      }
+    }
   }
 
   const machine = [];
@@ -96,7 +112,17 @@ export async function inspectPack(host, source) {
   home.sort(byPath);
   other.sort(byPath);
 
+  const icons = Object.create(null);
+  if (includeIcons && !validation.length && manifest?.manifestVersion === 6) {
+    const units = manifest.type === 'dshhome' ? Object.values(manifest.profiles || {}) : [manifest];
+    for (const unit of units) {
+      for (const { icon } of Object.values(unit.plugins || {})) {
+        if (icon?.startsWith('assets/plugins/') && entries[icon]) icons[icon] = entries[icon];
+      }
+    }
+  }
   return {
+    ...(includeIcons ? {icons} : {}),
     sha256: await host.sha256(bytes),
     size: bytes.byteLength,
     containerVersion: marker?.version ?? null,
@@ -118,4 +144,19 @@ function parseJson(raw) {
   } catch {
     return null;
   }
+}
+
+/** 列出资源选择框需要的插件描述和资源标识，避免向界面发送原始补丁。 */
+export async function exportChoices(host, { profile, home, plugins, profilePlugins }) {
+  const dir = home?.dir || profileHome(host, profile);
+  const profiles = profile ? [profile] : (await host.readdir(host.joinPath(dir, 'profiles')) || [])
+    .filter((entry) => entry.type === 'dir' && !['web', 'headless'].includes(entry.name))
+    .map((entry) => ({ name: entry.name, dir: entry.abs }));
+  const units = Object.create(null);
+  for (const item of profiles) {
+    const unit = await buildManifest(host, item);
+    await collectPluginMetadata(host, item.dir, unit, { plugins: profile ? plugins : profilePlugins?.[item.name], entries: {} });
+    units[item.name] = { plugins: unit.plugins, bundles: unit.bundles, dependencies: unit.dependencies };
+  }
+  return { candidates: await discoverExtensions(host, { home: dir, profiles, wholeHome: !profile }), units };
 }

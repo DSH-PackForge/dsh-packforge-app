@@ -135,14 +135,14 @@ function collectUrls(entry) {
 function detectFormat(entry, urls, manifestVersion) {
   if (urls.some((u) => /\.dspack(\?|#|$)/i.test(u))) return 'dspack';
   if (urls.some((u) => /\.tgz(\?|#|$)/i.test(u))) return 'tgz';
-  if (manifestVersion === 5 || manifestVersion === 4) return 'dspack';
+  if ([4, 5, 6].includes(manifestVersion)) return 'dspack';
   if (manifestVersion === 3) return 'tgz';
   return 'unknown';
 }
 
 /** manifestVersion → type 兜底（未显式声明 type 时）。 */
 function inferType(manifestVersion) {
-  return manifestVersion === 5 ? 'dshhome' : 'profile';
+  return (manifestVersion === 5 || manifestVersion === 6) ? 'dshhome' : 'profile';
 }
 
 function inferManifestVersion(urls) {
