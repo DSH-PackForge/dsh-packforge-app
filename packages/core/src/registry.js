@@ -19,7 +19,7 @@ export function registryUrl(raw) {
   }
   const url = new URL(raw);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || raw.includes('?') || raw.includes('#') || /[\\\s]/.test(raw)) {
-    throw new Error('registry 必须是无凭证、查询参数或片段的 HTTP(S) 地址');
+    throw new Error('registry 必须是无凭据、查询参数或片段的 HTTP(S) 地址');
   }
   return url.href.replace(/\/?$/, '/');
 }
@@ -101,7 +101,7 @@ export async function fetchPluginTarball(host, id, release, source, { authDir } 
     try {
       await host.download(metaUrl, file, { headers: await headersFor(metaUrl), redirectHeaders: headersFor });
     } catch {
-      throw new Error('无法从声明的 registry 获取版本元数据，请检查地址和本机 npm 凭证');
+      throw new Error('无法从声明的 registry 获取版本元数据，请检查地址和本机 npm 凭据');
     }
     let meta;
     try {

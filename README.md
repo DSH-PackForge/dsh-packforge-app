@@ -11,13 +11,13 @@ DSH 整合包平台 · **图形化管理工具**（一个 monorepo，两种宿�
 - **pack-structure v4 / `.dspack`**（`DSH-PackForge/specs/pack-structure/v4.md`）：标准 ZIP + `overrides/`（压缩软件可直接打开）
 - **workspace-config v1 / `.dshpkcfg`**（`specs/workspace-config/v1.md`）：导出工作区本地快照
 
-## 导出和更新 v6 整合包
+## 导出与更新 v6 整合包
 
-在桌面端打开导出页，选择 Profile 或 DSH_HOME，再打开「插件与资源」。插件名称和简介会从已安装插件的 locale 填入，作者可以修改名称、简介、图标和当前精确版本的 npm registry。安装器单独下载并校验该版本的 tarball，其他依赖继续使用各自的来源。
+在桌面端进入导出页面，选择单个配置档（profile）或整个 `DSH_HOME`（dshhome），再打开「插件与资源」。系统会自动从已安装插件的 `locale` 目录读取名称与简介，作者可自定义插件名称、简介、图标以及当前精确版本对应的专用 npm 包源（registry）；安装器会单独下载并校验该版本的压缩包（tarball），其余依赖继续沿用各自原有来源。
 
-插件可在包根的 `dsh_pack/paths.json` 声明额外文件，路径以 `./` 从 DSH_HOME 起算，`<profile>` 在安装时替换为目标配置档名。按项勾选路径、provider、MCP 服务器和技能。技能可以内嵌、固定到 Git 提交，或跟踪分支和标签。导入时为需要凭据的配置粘贴密钥，也可为指定目标授权复用已有凭据。留空会跳过对应项。
+插件可在其发布包根目录的 `dsh_pack/paths.json` 中声明额外数据文件：路径以 `./` 从 `DSH_HOME` 起算，其中的 `<profile>` 占位符会在安装时替换为目标配置档名。作者可逐项勾选插件数据路径、模型服务商（Provider）、MCP 服务与技能（Skill）；技能支持随包内嵌（embedded）、固定 Git 提交（fixed）或跟踪分支/标签（track）。导入时可为需要凭据的配置粘贴密钥，或授权复选目标机已有凭据；留空则跳过对应条目。
 
-命令行先列出资源键，再将选择保存到 JSON 文件。整机使用 `dspack resources <home> --home` 和 `dspack pack-home <home> --config <file>`。
+使用命令行时，可先列出可导出的资源键，再将勾选结果保存为 JSON 配置文件。导出整个 `DSH_HOME`（dshhome）时使用 `dspack resources <home> --home` 与 `dspack pack-home <home> --config <file>`：
 
 ```sh
 dspack resources ./profiles/work
@@ -27,7 +27,7 @@ dspack update ./release/work-1.1.0.dspack --dry-run
 dspack update ./release/work-1.1.0.dspack
 ```
 
-更新会对比已安装基线、本地文件与新版内容。冲突默认保留本地，交互导入可按配置成员选择新版。跟踪分支的技能会在显式更新时重新解析，即使包版本号相同。旧版首次升级可同时提供 `--previous` 与 `--previous-sha256` 来重建基线。
+更新时会对比「安装基线（baseline）、本机当前文件、新版整合包」三方状态：冲突默认保留本机修改，交互式导入支持按配置字段选择采用新版；跟踪分支或标签的技能在显式更新时会重新解析最新提交，即使整合包版本号未变。旧版整合包首次升级时，可同时传入 `--previous` 与 `--previous-sha256` 重建基线。
 
 ## 包结构（pnpm workspace）
 

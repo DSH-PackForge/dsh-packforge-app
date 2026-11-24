@@ -96,7 +96,7 @@ function patchNodes(doc) {
     }
     if (module === mcpModule) {
       const id = owner || row.getIn(['config','serverName']);
-      if (!id) throw new Error('MCP 配置缺少行 ID 与 serverName');
+      if (!id) throw new Error('MCP 配置缺少条目 ID 与 serverName');
       nodes.push({kind:'mcp',id:String(id),node:row,remove:()=>list.items.splice(list.items.indexOf(row),1)});
     }
   }
@@ -241,7 +241,7 @@ export function mergePatch(raw,item,value) {
       row.setIn(['config','servers',item.id],doc.createNode(config));
     } else row.setIn(['config','providers',item.id],doc.createNode(value));
   } else {
-    if (patchConflict(doc.toString(),item)) throw new Error('MCP 行 ID 已被其他插件使用：' + item.id);
+    if (patchConflict(doc.toString(),item)) throw new Error('MCP 条目 ID 已被其他插件使用：' + item.id);
     doc.contents.add(doc.createNode({insert:[value]}));
   }
   return doc.toString();

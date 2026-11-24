@@ -34,7 +34,7 @@ const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v6 
   inspect <profile>   打包前预览（将包含/排除哪些文件、manifest 内容）
   view <source>        查看一个已有的 .dspack（本地路径或 URL）
   update <source>     预览并更新已有整合包，保留本地改动
-  resources <dir>     列出插件与资源候选项（--home 扫描整机）
+  resources <dir>     列出插件与资源候选项（--home 扫描整个 DSH_HOME）
   install <source>    一键安装 .dspack 整合包（本地路径或 URL）
   market [<index>]    浏览市场索引（列出整合包 / 格式 / 下载源）
   version             显示版本

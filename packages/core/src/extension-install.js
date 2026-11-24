@@ -24,7 +24,7 @@ function scopeRoot(host, opts, name, actual = false) {
 async function checkedBytes(host,entries,kind,file) {
   if (!file || !/^[a-f0-9]{64}$/.test(file.sha256) || file.entry !== 'extension-data/'+kind+'/'+file.sha256 ||
       !(entries[file.entry] instanceof Uint8Array) || await host.sha256(entries[file.entry]) !== file.sha256) {
-    throw new Error('扩展文件缺失或摘要不符');
+    throw new Error('资源文件缺失或摘要不符');
   }
   return entries[file.entry];
 }
@@ -124,7 +124,7 @@ export async function planExtensionInstall(host, opts) {
     let duplicate = false;
     if (record.kind === 'provider' || record.kind === 'mcp') {
       if (record.kind === 'mcp' && (record.value?.name !== '@deepseek-ai/dsh-mcp-client' ||
-          record.value?.id !== record.id || !record.value.config?.serverName)) throw new Error('MCP 配置与行 ID 不符');
+          record.value?.id !== record.id || !record.value.config?.serverName)) throw new Error('MCP 配置与条目 ID 不符');
       const patch = host.joinPath(root,'cordis.patch.yml');
       const actualPatch = host.joinPath(actualRoot,'cordis.patch.yml');
       const current = await host.readTextFile(actualPatch);
@@ -182,13 +182,13 @@ export async function planExtensionInstall(host, opts) {
         const suffix = file.tail ? '/'+file.tail : '';
         const sourceProfile = record.scope.startsWith('profile:') ? record.scope.slice(8) : manifest.profileName;
         const sourceRel = expandTemplate(record.paths[file.index],sourceProfile)+suffix;
-        if (sourceRel !== file.path || protectedTarget(sourceRel)) throw new Error('插件载荷目标越出声明');
+        if (sourceRel !== file.path || protectedTarget(sourceRel)) throw new Error('插件数据目标路径超出声明范围');
         const rel = expandTemplate(record.paths[file.index],scope)+suffix;
         const scoped = manifest.type !== 'dshhome' && scope && rel.startsWith('profiles/'+scope+'/');
         const tail = scoped ? rel.slice(('profiles/'+scope+'/').length) : rel;
         const dest = await safePath(host,scoped ? root : home,tail);
         const real = await safePath(host,scoped ? actualRoot : realHome,tail);
-        if (targetFiles.has(real.toLowerCase())) throw new Error('插件载荷目标重复');
+        if (targetFiles.has(real.toLowerCase())) throw new Error('插件数据目标路径重复');
         targetFiles.add(real.toLowerCase());
         if (dirRecords.has(file)) {
           const existing = await host.packEntryType(real);

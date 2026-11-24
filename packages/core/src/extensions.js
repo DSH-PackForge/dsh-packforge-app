@@ -114,9 +114,9 @@ async function capturePath(host,home,profiles,entries,item,claimed,profileName) 
     }
     for (const [tail,bytes] of tree) {
       const path = rel + (tail ? '/'+tail : '');
-      if (protectedTarget(path) || !bytes) throw new Error('无法捕获插件资源：' + path);
+      if (protectedTarget(path) || !bytes) throw new Error('无法捕获插件数据：' + path);
       const key = path.toLowerCase();
-      if (claimed.has(key)) throw new Error('多个插件资源声明同一文件：' + path);
+      if (claimed.has(key)) throw new Error('多个插件数据规则声明了同一文件：' + path);
       claimed.add(key);
       const hash = await host.sha256(bytes);
       const entry = 'extension-data/path/' + hash;
