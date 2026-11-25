@@ -1,6 +1,6 @@
 import { sanitizeSlug } from './manifest.js';
 import { planExtensionInstall } from './extensions.js';
-import { installedSkillLocation, syncPackTree } from './update.js';
+import { packBaselineFiles, installedSkillLocation, recoverPackUpdate, syncPackTree } from './update.js';
 
 /** 在独立目录中还原包内容，再以安装基线为准提交文件、配置和依赖。 */
 export async function managedInstall(host, manifest, entries, opts, handlers) {
@@ -17,6 +17,8 @@ export async function managedInstall(host, manifest, entries, opts, handlers) {
     }
   }
   const target = whole ? home : host.joinPath(profilesRoot, profileName);
+  const profilesDir = whole ? 'profiles' : host.basename(profilesRoot);
+  if (opts.recoverInterrupted) await recoverPackUpdate(host, home, profilesDir);
   const exists = Boolean(await host.stat(target));
   const updating = !!(opts.update || (exists && opts.force));
   if (updating && !exists) throw new Error(`找不到要更新的目标：${target}`);
@@ -24,17 +26,26 @@ export async function managedInstall(host, manifest, entries, opts, handlers) {
   const scratch = await host.mkdtemp('dspack-prepare-');
   const stagedHome = host.joinPath(scratch, 'home');
   try {
-    const profilesDir = whole ? 'profiles' : host.basename(profilesRoot);
     const skillLocation = whole ? null : await installedSkillLocation(host, home, profilesDir, profileName);
     const skillRoot = (root) => skillLocation ? host.joinPath(root, skillLocation) : handlers.skillRoot?.(root, profileName);
-    const result = await handlers.stage(stagedHome, whole ? host.joinPath(home, 'profiles') : profilesRoot);
+    const listing = opts.dryRun && opts.listResourcesOnly;
+    const result = listing ? null : await handlers.stage(stagedHome, whole ? host.joinPath(home, 'profiles') : profilesRoot);
     const plan = await planExtensionInstall(host, {
       home: stagedHome, staging: true, profileName, profileDir: whole ? undefined : host.joinPath(stagedHome, 'profiles', profileName),
       skillRoot: skillRoot(stagedHome), actualSkillRoot: skillRoot(home), manifest, entries,
       credentialHome: home, credentialProfileDir: whole ? undefined : target,
+      credentialCwd: opts.credentialCwd,
+      credentialEnvironment: opts.credentialEnvironment,
+      baselineFiles: await packBaselineFiles(host,home,manifest,profileName,profilesDir), profilesDir,
+      installAnchor: opts.installAnchor, overlayPaths: opts.overlayPaths,
       credentials: opts.credentials, confirmedCredentials: opts.confirmedCredentials,
       decisions: opts.decisions,
     });
+    const resourceKeys = new Set(plan.items.map(item => item.key));
+    for (const key of Object.keys(opts.decisions || {})) {
+      if (!resourceKeys.has(key)) throw new Error('未找到指定的导入资源：' + key);
+    }
+    if (listing) return { resourcesOnly: true, manifest, dir: target, exists, items: plan.items, dryRun: true };
     await plan.apply();
     const previous = updating && opts.previousSource ? await handlers.previous(host.joinPath(scratch, 'previous')) : undefined;
     if (profilesDir !== 'profiles') {
@@ -58,6 +69,8 @@ export async function managedInstall(host, manifest, entries, opts, handlers) {
       }),
       preservePaths: plan.preservePaths.map(mapProfilePath),
       directories: plan.directories.map(mapProfilePath),
+      executablePaths: (plan.executablePaths ?? []).map(mapProfilePath),
+      verifyMcp: () => plan.verifyMcp({allowUnresolved:opts.noInstall === true}),
       commitCredentials: Object.values(opts.credentials || {}).some(Boolean) ? plan.commitCredentials : undefined,
     });
     return {

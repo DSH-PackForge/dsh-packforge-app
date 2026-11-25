@@ -125,6 +125,8 @@ test('静态插件元数据使用所有已导出的 locale，私有图标内嵌�
   assert.deepEqual({ ...plugin.desc }, { 'zh-CN': '简介' });
   assert.match(plugin.icon, /^assets\/plugins\/[0-9a-f]{64}\.png$/);
   assert.equal(plugin.source, undefined);
+  await collectPluginMetadata(host, dir, unit, { entries, plugins: { [id]: { source } } });
+  assert.equal(unit.plugins[id].source, undefined);
   assert.doesNotThrow(() => validatePluginAssets(unit, entries));
   assert.throws(() => validatePluginAssets(unit, {}), /图标/);
   assert.ok(validatePluginMetadata({ ...unit, dependencies: { [id]: '^1.0.0' }, plugins: { [id]: { source } } }).length);

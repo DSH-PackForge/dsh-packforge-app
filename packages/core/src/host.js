@@ -68,6 +68,21 @@ export class Host {
     throw new Error('Host.stat 未实现');
   }
 
+  /** 读取普通文件的 POSIX 访问位，宿主不支持时返回 null。 */
+  async packFileMode(_abs) {
+    throw new Error('Host.packFileMode 未实现');
+  }
+
+  /** 使用 Cordis 组合从低到高排列的补丁副本，返回配置行数组。 */
+  async composePackEntries(_patches) {
+    throw new Error('Host.composePackEntries 未实现');
+  }
+
+  /** 为普通文件设置 POSIX 访问位，宿主不支持时保留默认权限。 */
+  async chmodPackFile(_abs, _mode) {
+    throw new Error('Host.chmodPackFile 未实现');
+  }
+
   /** 读目录条目；不存在/无权 → null。返回 [{ name, abs, type }]，type ∈ file|dir|symlink|other。 */
   async readdir(_abs) {
     throw new Error('Host.readdir 未实现');

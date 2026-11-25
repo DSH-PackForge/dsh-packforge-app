@@ -4043,7 +4043,7 @@ function registryUrl(raw) {
   }
   const url = new URL(raw);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || raw.includes("?") || raw.includes("#") || /[\\\s]/.test(raw)) {
-    throw new Error("registry \u5FC5\u987B\u662F\u65E0\u51ED\u8BC1\u3001\u67E5\u8BE2\u53C2\u6570\u6216\u7247\u6BB5\u7684 HTTP(S) \u5730\u5740");
+    throw new Error("registry \u5FC5\u987B\u662F\u65E0\u51ED\u636E\u3001\u67E5\u8BE2\u53C2\u6570\u6216\u7247\u6BB5\u7684 HTTP(S) \u5730\u5740");
   }
   return url.href.replace(/\/?$/, "/");
 }
@@ -4472,6 +4472,8 @@ function maskArg(arg, previous, ref, refs, archived) {
 function portableMcpTransport(config, id, refs, archived = false) {
   if (!config || Array.isArray(config) || typeof config !== "object") unsupported();
   const result = { ...config };
+  if (config.oauth !== void 0 && (config.transport !== "streamable-http" || !/^mcp-client\/[a-z][a-z0-9-]*$/.test(config.oauth?.credentialKey))) unsupported();
+  if (config.enabled !== void 0 && typeof config.enabled !== "boolean") unsupported();
   if (config.url !== void 0) {
     if (typeof config.url !== "string") unsupported();
     checkUrl(config.url);
@@ -4797,7 +4799,24 @@ function field(parent, caption, value = "", type = "text") {
 function openForm(title, build) {
   return new Promise((resolve) => {
     const dialog = node("dialog");
-    dialog.style.cssText = "width:min(46rem,90vw);max-height:80vh;overflow:auto;padding:1.5rem;color:CanvasText;background:Canvas";
+    dialog.className = "pack-resource-dialog";
+    const style = node("style");
+    style.textContent = `
+      .pack-resource-dialog {box-sizing:border-box;width:min(46rem,90vw);max-height:80vh;overflow:auto;padding:1.4rem 1.6rem;border:1px solid var(--dsw-border-l1,GrayText);border-radius:14px;color:var(--dsw-label-primary,CanvasText);background:var(--dsw-bg-layer-1,Canvas);box-shadow:0 18px 64px #0003}
+      .pack-resource-dialog::backdrop {background:#151b2b60}
+      .pack-resource-dialog h2 {margin:0 0 1rem;font-size:1.25rem}
+      .pack-resource-dialog h3 {font-size:1rem;margin:.9rem 0 .4rem}
+      .pack-resource-dialog details,.pack-resource-dialog .pack-resource-row {border:1px solid var(--dsw-border-l1,GrayText);border-radius:8px;padding:.65rem .85rem;margin:.5rem 0}
+      .pack-resource-dialog summary {cursor:pointer;font-weight:600}
+      .pack-resource-dialog label {margin:.35rem 0}
+      .pack-resource-dialog input:not([type=checkbox]) {display:block;max-width:100%;width:100%;box-sizing:border-box}
+      .pack-resource-dialog small {overflow-wrap:anywhere;color:var(--dsw-label-tertiary,GrayText)}
+      .pack-resource-row>label {display:flex;align-items:center;justify-content:space-between;gap:1rem;font-weight:600}
+      .pack-resource-row>label>select {width:auto}
+      .pack-resource-row p {margin:.35rem 0;font-size:.9em}
+      .pack-resource-actions {display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}
+    `;
+    dialog.append(style);
     const form = node("form");
     form.append(node("h2", title));
     const read = build(form);
@@ -4808,7 +4827,12 @@ function openForm(title, build) {
     cancel.type = "button";
     cancel.onclick = () => dialog.close();
     let result = null;
-    form.append(error, ok, cancel);
+    const buttons = node("div");
+    buttons.className = "pack-resource-actions";
+    cancel.className = "ghost";
+    ok.className = "primary";
+    buttons.append(cancel, ok);
+    form.append(error, buttons);
     form.onsubmit = (event) => {
       event.preventDefault();
       try {
@@ -4910,13 +4934,16 @@ function chooseExportResources(candidates, units, current = {}, whole = false) {
       const ids = /* @__PURE__ */ new Set([...Object.keys(plugins), ...unit.bundles || [], ...Object.keys(unit.dependencies || {})]);
       for (const id of ids) {
         const details = node("details");
-        details.append(node("summary", profile + " \xB7 " + id));
+        const version2 = unit.dependencies?.[id];
+        details.append(node("summary", profile + " \xB7 " + id + (version2 ? "@" + version2 : "")));
         const before = (whole ? current.profilePlugins?.[profile] : current.plugins)?.[id] || {};
         const auto = plugins[id] || {};
         const name2 = field(details, "\u540D\u79F0\uFF08\u6587\u672C\u6216\u8BED\u8A00\u5BF9\u8C61\uFF09", asInput(before.name ?? auto.name));
         const desc = field(details, "\u7B80\u4ECB\uFF08\u6587\u672C\u6216\u8BED\u8A00\u5BF9\u8C61\uFF09", asInput(before.desc ?? auto.desc));
         const icon = field(details, "\u56FE\u6807\u5730\u5740", before.icon ?? auto.icon);
-        const registry = field(details, "\u6B64\u7248\u672C\u4E13\u7528 npm registry", before.source?.registry ?? auto.source?.registry);
+        const savedSource = version2 && before.version === version2 ? before.source : void 0;
+        const registry = field(details, "\u6B64\u7248\u672C\u4E13\u7528 npm registry", savedSource?.registry ?? auto.source?.registry);
+        registry.placeholder = "\u4F7F\u7528\u9ED8\u8BA4 registry";
         form.append(details);
         pluginRows.push(() => {
           const entry = {};
@@ -4929,7 +4956,7 @@ function chooseExportResources(candidates, units, current = {}, whole = false) {
           if (registry.value.trim()) {
             entry.source = { type: "npm", registry: registry.value.trim() };
             entry.version = unit.dependencies?.[id];
-          } else if (auto.source?.registry) {
+          } else if (auto.source?.registry || savedSource) {
             entry.source = { type: "npm" };
             entry.version = unit.dependencies?.[id];
           }

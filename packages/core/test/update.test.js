@@ -239,3 +239,99 @@ test('同一配置文件两个冲突可以分别接受新版与保留本地', as
   await run({previewToken:preview.previewToken, resolutions:{[members.find(m => m.label === 'a').key]:'upstream'}});
   assert.deepEqual(JSON.parse(await read(home,path)), {a:3, b:2});
 });
+
+test('大小写别名随上游改名，保留本地内容并在失败后恢复原目录项', async t => {
+  const {host,stage,home,root,run,write,read} = await setup(t);
+  const old = 'profiles/one/data/settings.txt', next = 'profiles/one/Data/Settings.txt';
+  await write(stage,old,'upstream');
+  await run({mode:'install'});
+  if (!await host.packEntryType(host.joinPath(home,next))) { t.skip('当前卷区分大小写'); return; }
+  const second = host.joinPath(root,'second');
+  await write(second,next,'upstream');
+  await write(home,old,'local');
+  const opts = {stagedHome:second}, entries = async dir => (await host.readdir(host.joinPath(home,dir))).map(e=>e.name);
+  const preview = await run({...opts,dryRun:true});
+  assert.deepEqual(preview.changes.filter(c=>c.action==='rename').map(c=>c.path), ['profiles/one/Data',next]);
+  assert(!preview.changes.some(c=>c.action==='remove'));
+  await assert.rejects(run({...opts,validateProfiles:async()=>{throw new Error('取消提交');}}),/取消提交/);
+  assert((await entries('profiles/one')).includes('data'));
+  assert.deepEqual(await entries('profiles/one/data'),['settings.txt']);
+  assert.equal(await read(home,old),'local');
+  await run({...opts,previewToken:preview.previewToken});
+  assert((await entries('profiles/one')).includes('Data'));
+  assert.deepEqual(await entries('profiles/one/Data'),['Settings.txt']);
+  assert.equal(await read(home,next),'local');
+  await write(second,next,'new upstream');
+  assert.equal((await run({...opts,dryRun:true})).conflicts[0].path,next);
+});
+
+test('区分大小写的卷保留目标位置已有的独立本机文件', async t => {
+  const {host,stage,home,root,run,write,read} = await setup(t);
+  const old='profiles/one/file', next='profiles/one/File';
+  await write(stage,old,'base');
+  await run({mode:'install'});
+  if (await host.packEntryType(host.joinPath(home,next))) { t.skip('当前卷不区分大小写'); return; }
+  await write(home,next,'user data');
+  const second=host.joinPath(root,'second');
+  await write(second,next,'upstream');
+  const preview=await run({stagedHome:second,dryRun:true});
+  assert(preview.conflicts.some(c=>c.path===next));
+  await run({stagedHome:second});
+  assert.equal(await read(home,next),'user data');
+  assert.equal(await read(home,old),null);
+});
+
+test('缓存已就绪的 profile 重新安装缺失的直接依赖，失败恢复现有模块', async t => {
+  const {host,stage,home,run,write,read} = await setup(t);
+  const modules='profiles/one/node_modules', file=modules+'/@example/p/package.json';
+  await write(stage,'profiles/one/package.json',JSON.stringify({dependencies:{'@example/p':'1.0.0',optional:'2.0.0'},optionalDependencies:{optional:'2.0.0'}}));
+  let calls=0;
+  const finalize=async()=>{calls++;await write(home,file,'{"name":"@example/p","version":"1.0.0"}');};
+  await run({mode:'install',finalize});
+  await run({finalize});
+  assert.equal(calls,1);
+  const pristine=await run({finalize,dryRun:true});
+  await host.rm(host.joinPath(home,modules),{recursive:true,force:true});
+  const repair=await run({finalize,dryRun:true});
+  assert(repair.changes.some(c=>c.path===modules && c.action==='install'));
+  await assert.rejects(run({finalize,previewToken:pristine.previewToken}), /重新预览/);
+  await run({finalize});
+  assert.equal(calls,2);
+  await write(home,modules+'/local.txt','local');
+  await host.rm(host.joinPath(home,file));
+  await assert.rejects(run({finalize:async()=>{throw new Error('离线');}}),/离线/);
+  assert.equal(await read(home,modules+'/local.txt'),'local');
+  await run({finalize});
+  assert.equal(calls,3);
+  await write(home,file,'{"name":"@example/p","version":"0.9.0"}');
+  await run({finalize});
+  assert.equal(calls,4);
+});
+
+test('仅技能执行位改变时预览和回滚，保留本机内容与读写权限', async t => {
+  const {host,stage,home,run,write,read}=await setup(t);
+  const rel='skills/example/bin/tool', local=host.joinPath(home,rel), staged=host.joinPath(stage,rel);
+  await write(stage,rel,'base');
+  if (await host.packFileMode(staged) === null) { t.skip('当前宿主不提供 POSIX 权限'); return; }
+  await host.chmodPackFile(staged,0o644);
+  await run({mode:'install'});
+  await write(home,rel,'local data');
+  await host.chmodPackFile(local,0o640);
+  await host.chmodPackFile(staged,0o755);
+  const preview=await run({dryRun:true});
+  assert(preview.changes.some(c=>c.action==='chmod' && c.path===rel));
+  await assert.rejects(run({validateProfiles:async()=>{throw new Error('回滚权限');}}),/回滚权限/);
+  assert.equal(await host.packFileMode(local),0o640);
+  assert.equal(await read(home,rel),'local data');
+  await run({previewToken:preview.previewToken});
+  assert.equal(await host.packFileMode(local),0o750);
+  assert.equal(await read(home,rel),'local data');
+  await host.chmodPackFile(staged,0o644);
+  await run();
+  assert.equal(await host.packFileMode(local),0o640);
+  await host.chmodPackFile(local,0o740);
+  await host.rm(staged);
+  const removed=await run({dryRun:true});
+  assert(removed.conflicts.some(c=>c.path===rel));
+  await run(); assert.equal(await read(home,rel),'local data');
+});

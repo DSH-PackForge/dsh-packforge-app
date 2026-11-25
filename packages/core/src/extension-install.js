@@ -1,5 +1,6 @@
 import { checkoutSkill, checkSkillSource } from './extension-skills.js';
-import { hasInstalledConfig, copyLocalPatchItem, credentialRefs, fillSlots, mcpNamespaceBindings, mergePatch, openCredentialStore, patchConflict } from './extension-patch.js';
+import { hasInstalledConfig, copyLocalPatchItem, credentialRefs, baselineOwnsMcp, fillSlots, materializeMcp, mergePatch, openCredentialStore, patchConflict, preserveLocalManagerServers, removeEditableManagerServer } from './extension-patch.js';
+import { checkMcpInstall } from './mcp-install.js';
 import { digestFiles, expandTemplate, protectedTarget, readJson, readTree, relativePath, safePath, segment } from './extension-files.js';
 import { validatedItems } from './extension-validate.js';
 
@@ -40,62 +41,22 @@ function dotenv(text,ref) {
   return null;
 }
 
-async function existingSecret(host,home,profile,ref) {
-  const env = host.env?.(ref);
-  if (env) return env;
+async function existingSecret(host,home,opts,ref) {
   const raw = await host.readTextFile(host.joinPath(home,'.credentials.yaml'));
   if (raw != null) {
     const v = openCredentialStore(raw).getIn(['refs',ref]);
     if (typeof v === 'string' && v) return v;
   }
-  for (const dir of new Set([profile,home])) {
+  if (opts.credentialEnvironment) return opts.credentialEnvironment(ref) || null;
+  const env = host.env?.(ref);
+  if (env) return env;
+  for (const dir of new Set([opts.credentialCwd ?? host.cwd?.(),home].filter(Boolean))) {
     const v = dotenv(await host.readTextFile(host.joinPath(dir,'.env')),ref);
     if (v) return v;
   }
   return null;
 }
 
-// 一个 profile 同时加载 HOME 和本档的补丁。不同 profile 的客户实例不共用工具注册表。
-async function resolveMcpNamespaces(host,opts,actions) {
-  const candidates = actions.filter(a=>a.mcp);
-  if (!candidates.length) return;
-  const whole = opts.manifest.type === 'dshhome';
-  const home = opts.credentialHome || opts.home;
-  const roots = new Map([[null,home]]);
-  if (whole && candidates.some(a=>a.mcp.scope === null)) {
-    const profiles = host.joinPath(home,'profiles');
-    for (const entry of await host.readdir(profiles) || []) {
-      if (entry.type === 'dir') roots.set(entry.name,entry.abs);
-    }
-    for (const name of Object.keys(opts.manifest.profiles)) roots.set(name,host.joinPath(profiles,name));
-  }
-  const existing = [];
-  for (const [scope,root] of roots) {
-    const patch = await host.readTextFile(host.joinPath(root,'cordis.patch.yml'));
-    for (const entry of mcpNamespaceBindings(patch)) existing.push({...entry,scope});
-  }
-  const overlaps = (a,b) => a.server === b.server && a.owner !== b.owner &&
-    a.scope !== b.scope && (a.scope === null || b.scope === null);
-  // 显式选取的包内条目优先，然后按清单顺序保留能共存的条目。
-  const priority = a => opts.decisions?.[a.item.key] === 'replace' ? 0 : 1;
-  const chosen = [];
-  for (const action of candidates.sort((a,b)=>priority(a)-priority(b))) {
-    const {item,mcp} = action;
-    if (existing.some(other=>overlaps(mcp,other))) {
-      item.conflict = true;
-      item.skipped = true;
-      if (priority(action) === 0) throw new Error('MCP 名称已由另一作用域的本地条目占用，请先改名或跳过：'+mcp.server);
-      continue;
-    }
-    if (item.skipped) continue;
-    const other = chosen.find(a=>overlaps(mcp,a.mcp));
-    if (other) {
-      item.conflict = true;
-      item.skipped = true;
-      if (priority(action) === 0 && priority(other) === 0) throw new Error('所选 MCP 条目使用相同名称，请只选择可共存的条目：'+mcp.server);
-    } else chosen.push(action);
-  }
-}
 
 export async function planExtensionInstall(host, opts) {
   const {entries,manifest,home} = opts;
@@ -104,8 +65,10 @@ export async function planExtensionInstall(host, opts) {
   const targetFiles = new Set();
   const patchIds = new Set();
   const pending = [];
+  const preparedManagerPatches = new Set();
   const preservePaths = [];
   const directories = [];
+  const executablePaths = [];
   function homeRel(abs) {
     const prefix = host.resolvePath(home).replace(/\\/g,'/')+'/';
     const path = host.resolvePath(abs).replace(/\\/g,'/');
@@ -122,22 +85,35 @@ export async function planExtensionInstall(host, opts) {
       destination:'',conflict:false,credentialRefs:[],missingCredentials:[],availableCredentials:[]};
     let run, preserve;
     let duplicate = false;
+    let mcp;
     if (record.kind === 'provider' || record.kind === 'mcp') {
       if (record.kind === 'mcp' && (record.value?.name !== '@deepseek-ai/dsh-mcp-client' ||
           record.value?.id !== record.id || !record.value.config?.serverName)) throw new Error('MCP 配置与条目 ID 不符');
       const patch = host.joinPath(root,'cordis.patch.yml');
       const actualPatch = host.joinPath(actualRoot,'cordis.patch.yml');
       const current = await host.readTextFile(actualPatch);
+      const targetRecord = materializeMcp(record);
+      const manager = record.binding === 'manager';
+      const relPatch = (scope === null ? '' : (opts.profilesDir || 'profiles')+'/'+scope+'/')+'cordis.patch.yml';
+      const tree = opts.baselineFiles?.[relPatch]?.tree;
+      if (record.kind === 'mcp') {
+        const id = targetRecord.id;
+        const config = targetRecord.value.config;
+        mcp = {scope,id,actualPatch,server:config.serverName,owner:'client:'+id,legacy:manager ? record.owner || 'mcp-manager' : null,tree,
+          oauthKey:config.oauth?.credentialKey,enabled:targetRecord.value.disabled !== true,
+          owned:await baselineOwnsMcp(host,tree,id)};
+        if (manager) item.notice = '此服务将由独立 MCP 客户端运行，可在该客户端的配置行管理；MCP 管理器不再列出此条目';
+      }
       const config = record.kind === 'mcp' ? record.value.config : record.value;
       item.destination = [config.url,config.baseURL,config.baseUrl,config.command].find(v=>typeof v === 'string') || record.id;
       const ids = [actualPatch+'/'+record.kind+'/'+record.id];
       if (record.kind === 'mcp') ids.push(actualPatch+'/server/'+record.value.config.serverName);
       duplicate = ids.some(id=>patchIds.has(id));
-      item.conflict = patchConflict(current,record) || duplicate;
+      item.conflict = duplicate || (manager ? false : !mcp?.owned && patchConflict(current,record));
       preserve = async () => {
         if (!opts.staging || !current) return;
         const staged = await host.readTextFile(patch);
-        const kept = copyLocalPatchItem(current,staged,record);
+        const kept = copyLocalPatchItem(current,staged,targetRecord);
         if (kept !== staged) await host.writeTextFile(patch,kept);
       };
       ids.forEach(id=>patchIds.add(id));
@@ -150,27 +126,33 @@ export async function planExtensionInstall(host, opts) {
         if (supplied === undefined && (useCounts.get(ref) === 1 || explicit) && has(opts.credentials,ref)) supplied = opts.credentials[ref];
         if (supplied && (typeof supplied !== 'string' || !/^[\x21-\x7e]+$/.test(supplied))) throw new Error('凭据含无效字符：'+ref);
         activeRefs[ref] = ref;
-        const existing = await existingSecret(host,realHome,actualRoot,ref);
+        const existing = await existingSecret(host,realHome,opts,ref);
         if (existing) item.availableCredentials.push(ref);
-        if (existing && explicit) values[ref] = existing;
-        else if (supplied) {
+        if (supplied) {
           if ((existing && existing !== supplied) || useCounts.get(ref)>1) {
             // 共享引用不能让新输入的密钥被另一个用途直接消费。
             const hash = await host.sha256(new TextEncoder().encode(JSON.stringify([actualRoot,record.key,item.destination,ref])));
             activeRefs[ref] = 'DSPACK_'+hash.slice(0,16).toUpperCase()+'_'+ref;
-            const old = await existingSecret(host,realHome,actualRoot,activeRefs[ref]);
+            const old = await existingSecret(host,realHome,opts,activeRefs[ref]);
             if (old && old !== supplied) throw new Error('此用途已有独立凭据，请先在 DSH 中更新：'+activeRefs[ref]);
           }
           values[activeRefs[ref]] = supplied;
-        } else item.missingCredentials.push(ref);
+        } else if (existing && explicit) values[ref] = existing;
+        else item.missingCredentials.push(ref);
       }
       run = async () => {
         const tokens = Object.fromEntries(item.credentialRefs.map(ref=>[ref,marker(activeRefs[ref])]));
-        const value = fillSlots(record.value,tokens);
+        const value = fillSlots(targetRecord.value,tokens);
         if (record.kind === 'provider' && value.apiKeyEnv) value.apiKeyEnv = activeRefs[value.apiKeyEnv];
         if (record.kind === 'mcp' && record.binding !== 'manager' && item.credentialRefs.length) value.config.expandTemplates = true;
-        await host.writeTextFile(patch,mergePatch(await host.readTextFile(patch),record,value));
-        pending.push({record,values,expected:value,actualPatch,actualRoot});
+        let staged = await host.readTextFile(patch);
+        if (mcp && opts.staging && !preparedManagerPatches.has(patch)) {
+          staged = await preserveLocalManagerServers(host,current,staged,tree);
+          preparedManagerPatches.add(patch);
+        }
+        if (mcp?.replaceOwner) staged = removeEditableManagerServer(staged,current,mcp.replaceOwner,mcp.server);
+        await host.writeTextFile(patch,mergePatch(staged,targetRecord,value));
+        pending.push({record:targetRecord,values,expected:value,actualPatch});
       };
     } else if (record.kind === 'path') {
       if (!Array.isArray(record.paths) || !Array.isArray(record.files)) throw new Error('插件路径声明无效');
@@ -256,7 +238,14 @@ export async function planExtensionInstall(host, opts) {
         try {
           if (record.flat) await host.writeFile(staged,files.get(id));
           else {
-            for (const [path,data] of files) await host.writeFile(host.joinPath(staged,...path.split('/')),data);
+            for (const [path,data] of files) {
+              const file = host.joinPath(staged,...path.split('/'));
+              await host.writeFile(file,data);
+              if (remote?.executables.has(path)) {
+                await host.chmodPackFile(file,0o755);
+                executablePaths.push(homeRel(host.joinPath(dest,...path.split('/'))));
+              }
+            }
             if (remote) {
               const origin = {repo:remote.repository+(remote.subdir ? '#/'+remote.subdir : ''),commit:remote.commit,ref:remote.ref,mode:remote.mode,digest:remote.digest};
               await host.writeTextFile(host.joinPath(staged,'.dsh-skill.json'),JSON.stringify(origin,null,2)+'\n');
@@ -273,15 +262,11 @@ export async function planExtensionInstall(host, opts) {
     const decision = opts.decisions?.[item.key];
     item.skipped = decision === 'skip' || decision === 'keep' || item.missingCredentials.length > 0 ||
       ((duplicate || item.conflict && !opts.staging) && decision !== 'replace');
-    const mcp = record.kind === 'mcp' ? {
-      scope, server:record.value.config.serverName,
-      owner:record.binding === 'manager' ? 'manager:'+(record.owner || 'mcp-manager') : 'client:'+record.id,
-    } : undefined;
     actions.push({item,run,preserve,mcp});
   }
-  await resolveMcpNamespaces(host,opts,actions);
+  const verifyMcp = await checkMcpInstall(host,opts,actions);
   return {
-    items:actions.map(a=>a.item), preservePaths, directories,
+    items:actions.map(a=>a.item), preservePaths, directories, executablePaths, verifyMcp,
     async apply() {
       for (const {item,run,preserve} of actions) {
         if (item.skipped) { await preserve(); continue; }
@@ -289,12 +274,14 @@ export async function planExtensionInstall(host, opts) {
       }
     },
     async commitCredentials() {
-      for (const {record,values,expected,actualPatch,actualRoot} of pending) {
+      for (const {record,values,expected,actualPatch} of pending) {
         const raw = await host.readTextFile(actualPatch);
         if (!hasInstalledConfig(raw,record,expected)) continue;
         for (const ref of Object.keys(values)) {
-          if (await existingSecret(host,realHome,actualRoot,ref)) continue;
           const value = values[ref];
+          const existing = await existingSecret(host,realHome,opts,ref);
+          if (existing === value) continue;
+          if (existing) throw new Error('凭据已在预览后更改，请重新预览：'+ref);
           if (typeof value !== 'string' || !/^[\x21-\x7e]+$/.test(value)) throw new Error('凭据含无效字符：'+ref);
           const dest = host.joinPath(realHome,'.credentials.yaml');
           const store = openCredentialStore(await host.readTextFile(dest));

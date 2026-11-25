@@ -68,6 +68,7 @@ pack / inspect 可用 --home <path> 指定配置档所属的 DSH_HOME。
 pack / pack-home 可用 --config <file> 提供 selection 和逐版本插件配置。
 
 install / update 选项:
+  --skip-resource <key>    跳过指定资源，可重复使用；预览会列出资源键
   --previous <path> --previous-sha256 <hex>    从已知旧包重建首次升级基线
   --name <slug>           安装后的 Profile 目录名（默认取 manifest）
   --registry <url>        pnpm 安装依赖时的镜像源
@@ -498,6 +499,7 @@ async function runInstall(host, args, update = false) {
       'profiles-root': { type: 'string' },
       previous: { type: 'string' },
       'previous-sha256': { type: 'string' },
+      'skip-resource': { type: 'string', multiple: true },
       home: { type: 'string' },
       sha256: { type: 'string' },
       size: { type: 'string' },
@@ -519,6 +521,7 @@ async function runInstall(host, args, update = false) {
   }
 
   const result = await reviewImport(host, installPack, {
+    decisions: Object.fromEntries((values['skip-resource'] || []).map(key => [key, 'skip'])),
     update, previousSource: values.previous, previousSha256: values['previous-sha256'],
     source: positionals[0],
     profilesRoot: values['profiles-root'],

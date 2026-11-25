@@ -310,7 +310,7 @@ export async function collectPluginMetadata(host, profileDir, unit, { plugins, e
       throw new Error('plugins[' + key + '] 必须是对象');
     }
     const release = unit.dependencies?.[key];
-    const current = override && (override.version === undefined || override.version === release);
+    const current = typeof release === 'string' && override?.version === release;
     let source = saved && saved.version === release ? { type: 'npm', registry: saved.registry } : undefined;
     if (current && Object.hasOwn(override, 'source')) {
       source = override.source?.type === 'npm' && override.source.registry === undefined ? undefined : override.source;

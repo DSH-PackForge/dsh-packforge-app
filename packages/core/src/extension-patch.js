@@ -39,6 +39,7 @@ function masked(value, id, path = [], refs = new Set()) {
     return out;
   }
   if (typeof value !== 'string' || !value) return value;
+  if (parent === 'oauth' && key === 'credentialKey' && /^mcp-client\/[a-z][a-z0-9-]*$/.test(value)) return value;
   if (key === 'apiKeyEnv' && refPattern.test(value)) return value;
   if (id.startsWith('PROVIDER_') && parent === 'headers' &&
       (/^(accept|content-type)$/i.test(key) && /^[\w/+*,;. =-]+$/.test(value) ||
@@ -92,7 +93,13 @@ function patchNodes(doc) {
     const servers = row.getIn(['config','servers'],true);
     if ((module === manager || owner === 'mcp-manager' || owner === 'mcp') && isMap(servers)) {
       for (const pair of servers.items) nodes.push({kind:'mcp',id:String(pair.key.value),binding:'manager',
-        owner:owner || 'mcp-manager',insertOwner,node:pair.value,remove:()=>servers.delete(pair.key.value)});
+        owner:owner || 'mcp-manager',insertOwner,node:pair.value,remove:()=>{
+          servers.delete(pair.key.value);
+          if (!servers.items.length) {
+            row.deleteIn(['config','servers']);
+            if (!row.get('config',true).items.length) row.delete('config');
+          }
+        }});
     }
     if (module === mcpModule) {
       const id = owner || row.getIn(['config','serverName']);
@@ -217,9 +224,80 @@ export function patchConflict(raw,item) {
     row.get('insert',true).items.some(other => isMap(other) && other.get('id') === item.id));
 }
 
+export function materializeMcp(item) {
+  if (item.kind !== 'mcp' || item.binding !== 'manager') return item;
+  const original = item.value.config;
+  const server = original.serverName;
+  const id = 'dspack-mcp-' + server;
+  const transport = original.transport || 'stdio';
+  const config = {transport,serverName:server,expandTemplates:true,failOnStartupError:false,
+    startupTimeoutMs:original.startupTimeoutMs ?? 30000,toolLoading:original.toolLoading ?? 'eager'};
+  const keys = transport === 'stdio' ? ['command','args','env','cwd'] : ['url','headers','oauth'];
+  for (const key of [...keys,'toolCallTimeoutMs','closeTimeoutMs','reconnect']) {
+    if (original[key] !== undefined) config[key] = original[key];
+  }
+  const row = {id,name:mcpModule,config};
+  if (original.enabled === false) row.disabled = true;
+  if (item.credentialRefs?.length || original.oauth) row.inject = ['credentials'];
+  return {...item,id,binding:undefined,fromManager:true,value:row};
+}
+
+export async function baselineOwnsMcp(host,tree,id,server) {
+  if (!tree?.fields) return false;
+  const hash = tuple => host.sha256(new TextEncoder().encode(JSON.stringify(tuple)));
+  const [idKey,desired,configKey,serversKey,serverKey,insertKey] = await Promise.all([
+    hash(['key','id']),hash(['value',id]),hash(['key','config']),hash(['key','servers']),hash(['key',server]),hash(['key','insert']),
+  ]);
+  function contains(list) {
+    for (const row of Object.values(list?.fields ?? {})) {
+      const fields = row.fields;
+      if (fields?.[idKey]?.hash === desired &&
+          (server === undefined || fields[configKey]?.fields?.[serversKey]?.fields?.[serverKey])) return true;
+      if (fields?.[insertKey] && contains(fields[insertKey])) return true;
+    }
+    return false;
+  }
+  return contains(tree);
+}
+
+export async function preserveLocalManagerServers(host,current,staged,tree) {
+  if (!current?.includes('mcp')) return staged;
+  let result = staged;
+  for (const n of patchNodes(docOf(current))) {
+    if (n.binding !== 'manager' || await baselineOwnsMcp(host,tree,n.owner,n.id)) continue;
+    const value = {id:n.id,name:mcpModule,config:{...n.node.toJSON(),serverName:n.id}};
+    const item = {...n,value};
+    if (!matching(docOf(result),item).length) result = mergePatch(result,item,value);
+  }
+  return result;
+}
+
+/** 用户明确选择替换时，仅移除同一目标补丁里的对应服务。空表仍保留该层原有的覆盖语义。 */
+export function removeEditableManagerServer(staged,current,owner,server) {
+  const doc = docOf(staged);
+  const source = eachRow(docOf(current)).findLast(({row})=>row.get('id') === owner && row.hasIn(['config','servers',server]));
+  if (!source) throw new Error('本地 MCP 配置已变化，请重新预览：'+server);
+  let target = eachRow(doc).findLast(({row})=>row.get('id') === owner)?.row;
+  if (!target) {
+    target = source.row.clone();
+    const sourceRow = patchNodes(docOf(current)).find(n=>n.binding === 'manager' && n.owner === owner && n.id === server);
+    if (sourceRow?.insertOwner) {
+      const insertion = doc.createNode({insert:[]});
+      insertion.get('insert',true).add(target);
+      doc.contents.add(insertion);
+    } else doc.contents.add(target);
+  }
+  if (!target.hasIn(['config','servers'])) target.setIn(['config','servers'],doc.createNode({}));
+  target.deleteIn(['config','servers',server]);
+  return doc.toString();
+}
+
 export function mergePatch(raw,item,value) {
   const doc = docOf(raw);
-  for (const node of matching(doc,item)) node.remove();
+  for (const node of matching(doc,item)) {
+    if (item.fromManager && !item.binding && (node.binding === 'manager' || node.id !== item.id)) continue;
+    node.remove();
+  }
   if (item.kind === 'provider' || item.binding === 'manager') {
     const module = item.binding === 'deepseek' ? deepseek : item.binding === 'manager' ? manager : providerModule;
     const id = item.owner || (item.binding === 'deepseek' ? 'llm-deepseek' : item.binding === 'manager' ? 'mcp-manager' : 'llm-pi-ai');
@@ -241,7 +319,10 @@ export function mergePatch(raw,item,value) {
       row.setIn(['config','servers',item.id],doc.createNode(config));
     } else row.setIn(['config','providers',item.id],doc.createNode(value));
   } else {
-    if (patchConflict(doc.toString(),item)) throw new Error('MCP 条目 ID 已被其他插件使用：' + item.id);
+    const occupied = item.fromManager
+      ? eachRow(doc).some(({row})=>row.get('id') === item.id)
+      : patchConflict(doc.toString(),item);
+    if (occupied) throw new Error('MCP 条目 ID 已被其他插件使用：' + item.id);
     doc.contents.add(doc.createNode({insert:[value]}));
   }
   return doc.toString();
@@ -279,4 +360,10 @@ export function hasInstalledConfig(raw,record,expected) {
   let target = expected;
   if (record.binding === 'manager') { target = {...expected.config}; delete target.serverName; }
   return JSON.stringify(ordered(node.node.toJSON())) === JSON.stringify(ordered(target));
+}
+
+export function mcpClientInPatch(raw,id) {
+  if (!raw?.trim()) return null;
+  const clients = eachRow(docOf(raw)).filter(({row})=>row.get('id') === id && row.get('name') === mcpModule);
+  return clients.length === 1 ? clients[0].row.toJSON() : null;
 }

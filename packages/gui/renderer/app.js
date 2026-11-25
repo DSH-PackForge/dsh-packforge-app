@@ -478,6 +478,7 @@ function installSummary(result) {
   for (const item of result.items || []) {
     const status = item.skipped ? '跳过' : (result.dryRun ? '将安装' : '已处理');
     lines.push(status + ' · ' + item.id + (item.destination ? ' → ' + item.destination : ''));
+    if (item.notice) lines.push('  ' + item.notice);
   }
   for (const change of result.changes || []) {
     lines.push(change.action + ' · ' + change.path);

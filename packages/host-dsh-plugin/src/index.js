@@ -180,6 +180,19 @@ export class DshPluginHost extends Host {
     return bridge.packEntryType(abs);
   }
 
+  async packFileMode(abs) {
+    return this.requireBridge().packFileMode(abs);
+  }
+
+  /** 通过具备 Cordis 的宿主组合补丁，浏览器端无需加载服务端模块。 */
+  async composePackEntries(patches) {
+    return this.requireBridge().composePackEntries(patches);
+  }
+
+  async chmodPackFile(abs, mode) {
+    return this.requireBridge().chmodPackFile(abs, mode);
+  }
+
   async removePackDirIfEmpty(abs) {
     return this.requireBridge().removePackDirIfEmpty(abs);
   }

@@ -131,16 +131,19 @@ export async function collectExtensions(host,{home,profiles,manifest,entries,sel
   const all = await inspect(host,{home,profiles,wholeHome:manifest.type === 'dshhome'});
   const profileName = profiles[0]?.name || '';
   const single = manifest.type !== 'dshhome';
-  function replaceEntry(path,patch) {
-    if (Object.hasOwn(entries,path)) entries[path] = utf8.encode(patch);
+  if (single && profiles.length) {
+    manifest.patch = all.patches.get('profile:' + profileName);
+  } else if (!single) {
+    for (const [name, unit] of Object.entries(manifest.profiles)) unit.patch = all.patches.get('profile:' + name);
   }
-  for (const [scope,patch] of all.patches) {
-    if (scope === 'home') replaceEntry(single ? 'home/cordis.patch.yml' : 'overrides/cordis.patch.yml',patch);
-    else {
-      const name = scope.slice(8);
-      if (single) { manifest.patch = patch; replaceEntry('overrides/cordis.patch.yml',patch); }
-      else if (manifest.profiles?.[name]) { manifest.profiles[name].patch = patch; replaceEntry('overrides/profiles/'+name+'/cordis.patch.yml',patch); }
-    }
+  // 每份随包发布的补丁都必须对应已清理的作用域，包括按白名单部分导出的整机快照。
+  for (const path of Object.keys(entries)) {
+    const rel = ordinaryHomePath(path, manifest, profileName);
+    const match = /^(?:profiles\/([^/]+)\/)?cordis\.patch\.yml$/i.exec(rel);
+    if (!match) continue;
+    const scope = match[1] ? 'profile:' + match[1] : 'home';
+    if (!all.patches.has(scope)) throw new Error('导出配置档补丁时须同时选择 profiles/' + match[1] + '/package.json：' + path);
+    entries[path] = utf8.encode(all.patches.get(scope));
   }
   const selected = Object.fromEntries(Object.keys(sidecars).map(kind=>[kind,choiceMap(selection?.[kind])]));
   const output = {paths:{plugins:Object.create(null)},providers:{items:[]},mcp:{items:[]},skills:{items:[]}};

@@ -99,6 +99,9 @@ function maskArg(arg, previous, ref, refs, archived) {
 export function portableMcpTransport(config, id, refs, archived = false) {
   if (!config || Array.isArray(config) || typeof config !== 'object') unsupported();
   const result = {...config};
+  if (config.oauth !== undefined && (config.transport !== 'streamable-http' ||
+      !/^mcp-client\/[a-z][a-z0-9-]*$/.test(config.oauth?.credentialKey))) unsupported();
+  if (config.enabled !== undefined && typeof config.enabled !== 'boolean') unsupported();
   if (config.url !== undefined) {
     if (typeof config.url !== 'string') unsupported();
     checkUrl(config.url);

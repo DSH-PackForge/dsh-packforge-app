@@ -1,5 +1,6 @@
 import { configBaseline, mergeConfig } from './update-config.js';
 import { isExcluded } from './security.js';
+import { isExactSemver } from './manifest.js';
 
 const statePath = '.dsh-pack/updates';
 const encoder = new TextEncoder();
@@ -90,8 +91,13 @@ async function fileState(host, root, path) {
   return hash;
 }
 
-async function stageFiles(host, root, profilesDir) {
+function skillFile(path) {
+  return path.startsWith('skills/') || path.startsWith('.dsh-pack/skills/');
+}
+
+async function stageFiles(host, root, profilesDir, executablePaths = []) {
   const result = Object.create(null);
+  const executable = new Set(executablePaths);
   async function walk(dir, prefix) {
     const entries = await host.readdir(dir);
     if (!entries) {
@@ -120,6 +126,10 @@ async function stageFiles(host, root, profilesDir) {
           }
         }
         result[path] = tree ? { hash, tree } : { hash };
+        if (skillFile(path)) {
+          const mode = await host.packFileMode(absolute);
+          result[path].executable = executable.has(path) || (mode !== null && Boolean(mode & 0o111));
+        }
       } else {
         throw new Error('暂存目录包含符号链接或特殊文件：' + path);
       }
@@ -140,7 +150,8 @@ async function readState(host, home, key, profilesDir) {
     throw new Error('整合包更新基线格式无效');
   }
   for (const [path, entry] of Object.entries(state.files)) {
-    if (!managed(relative(path), segment(state.profilesDir || profilesDir)) || !sha.test(entry?.hash)) {
+    if (!managed(relative(path), segment(state.profilesDir || profilesDir)) || !sha.test(entry?.hash) ||
+      (entry.executable !== undefined && typeof entry.executable !== 'boolean')) {
       throw new Error('整合包更新基线包含不受管的路径或无效摘要');
     }
   }
@@ -198,11 +209,75 @@ function fields(manifest, profileName, profilesDir) {
   return { type, units: names.map(name => profilesDir + '/' + name) };
 }
 
-async function compare(host, opts, key, next, otherOwners, base, derived, oldDirectories, profilesDir) {
-  const changes = [];
+async function baselineKey(host, type, units) {
+  return host.sha256(encoder.encode(type === 'profile' ? 'profile/' + units[0].toLowerCase() : 'dshhome'));
+}
+
+/** 扩展配置在首次接管已有文件时需要保留原有配置项。 */
+export async function packBaselineFiles(host, home, manifest, profileName, profilesDir) {
+  const {type,units} = fields(manifest,profileName,profilesDir);
+  return (await readState(host,home,await baselineKey(host,type,units),profilesDir))?.files;
+}
+
+// 同卷上别名的大小写由目录项决定。区分大小写的卷可以同时存放两个同名异形文件。
+async function alignCase(host, opts, base, oldDirs, derived, next) {
+  const desired = new Map();
+  const spellings = paths => {
+    const result = new Set();
+    for (const path of paths) {
+      let prefix = '';
+      for (const part of path.split('/')) {
+        prefix = prefix ? prefix + '/' + part : part;
+        result.add(prefix);
+      }
+    }
+    return result;
+  };
+  for (const path of spellings([...Object.keys(next), ...(opts.directories ?? [])])) {
+    desired.set(path.toLowerCase(), path);
+  }
+  const aliases = new Map(), renames = [];
+  const kept = (opts.preservePaths ?? []).map(path => relative(path).toLowerCase());
+  for (const path of spellings([...Object.keys(base), ...Object.keys(oldDirs), ...Object.keys(derived)])) {
+    const lower = path.toLowerCase(), target = desired.get(lower);
+    if (!target || target === path || kept.some(k => lower === k || lower.startsWith(k+'/'))) continue;
+    const parts = path.split('/'), to = target.split('/');
+    const name = parts.pop(), renamed = to.pop();
+    const parent = parts.join('/'), destParent = to.join('/');
+    if (parent !== destParent && aliases.get(parent) !== destParent) continue;
+    if (name !== renamed) {
+      const dir = host.joinPath(opts.home, parent);
+      const entries = (await host.readdir(dir) ?? []).filter(entry => entry.name.toLowerCase() === name.toLowerCase());
+      if (entries.length > 1) continue;
+      if (entries.length === 1) {
+        if (!await typeAt(host, opts.home, path) || !await typeAt(host, opts.home, target)) continue;
+        if (entries[0].name === name) {
+          const from = [...to, name].join('/');
+          renames.push({kind:'case', path:target, from});
+        }
+      }
+    }
+    aliases.set(path, target);
+  }
+  const align = record => Object.fromEntries(Object.entries(record).map(([path, value]) => [aliases.get(path) ?? path, value]));
+  return {base:align(base), oldDirs:align(oldDirs), derived:align(derived), renames};
+}
+
+async function moveCase(host, home, from, to, restoring = false) {
+  const parts = from.split('/'), name = parts.pop(), target = to.split('/').at(-1);
+  const entries = await host.readdir(host.joinPath(home, ...parts));
+  const found = entries?.filter(e => e.name.toLowerCase() === name.toLowerCase()) ?? [];
+  if (found.length !== 1) throw new Error('大小写重命名目标已发生变化：' + from);
+  if (restoring && found[0].name === target) return;
+  if (found[0].name !== name || found[0].type === 'symlink') throw new Error('大小写重命名源已发生变化：' + from);
+  await host.move(host.joinPath(home, from), host.joinPath(home, to));
+}
+
+async function compare(host, opts, key, next, otherOwners, base, derived, oldDirectories, profilesDir, renames) {
+  const changes = renames.map(({path, from}) => ({path, from, action:'rename', conflict:false}));
   const conflicts = [];
   const writes = [];
-  const checks = [];
+  const checks = renames.map(({from,path}) => ['rename',from,path]);
   const unmanaged = new Set();
   const preserved = new Set();
   const requested = opts.preservePaths ?? [];
@@ -225,6 +300,12 @@ async function compare(host, opts, key, next, otherOwners, base, derived, oldDir
     const after = incoming?.hash ?? null;
     const choice = own(choices, path) ? choices[path] : null;
     checks.push([path, before, current, after]);
+    const trackMode = skillFile(path);
+    const mode = trackMode && current !== null ? await host.packFileMode(host.joinPath(opts.home, path)) : null;
+    const localExec = mode === null ? null : Boolean(mode & 0o111);
+    const oldExec = Boolean(old?.executable), nextExec = Boolean(incoming?.executable);
+    const desiredExec = localExec === null || !old || oldExec !== nextExec ? nextExec : localExec;
+    if (trackMode) checks.push([path,'executable',old?.executable,localExec,incoming?.executable]);
     let merged;
     let conflict = false;
     let action;
@@ -251,14 +332,30 @@ async function compare(host, opts, key, next, otherOwners, base, derived, oldDir
       }
       action = merged ? 'merge' : choice === 'upstream' ? (after ? 'replace' : 'remove') : 'keep';
     }
+    let exec = desiredExec;
+    const modeConflict = localExec !== null && ((!incoming && old && oldExec !== localExec && !shared) ||
+      (incoming && (!old || shared && oldExec !== nextExec) && localExec !== nextExec));
+    if (modeConflict) {
+      if (!conflict) conflicts.push({path, base:before, local:current, upstream:after, members:1});
+      conflict = true;
+      if (choice !== 'upstream') {
+        exec = localExec;
+        action = 'keep';
+      } else {
+        action = incoming ? 'replace' : 'remove';
+      }
+    }
+    const changeMode = incoming && localExec !== null && exec !== localExec && !unmanaged.has(path);
+    if (changeMode && (action === 'keep' || action === 'unchanged')) action = 'chmod';
     if (action !== 'unchanged' || conflict) {
       changes.push({ path, action, conflict });
     }
-    if (['add', 'replace', 'remove', 'merge'].includes(action)) {
+    if (['add', 'replace', 'remove', 'merge', 'chmod'].includes(action)) {
       const data = merged ? encoder.encode(merged.text) : null;
-      const expected = data ? await host.sha256(data) : after;
-      if (current !== expected) {
-        writes.push({ path, current, expected, data });
+      const expected = action === 'chmod' ? current : data ? await host.sha256(data) : after;
+      if (current !== expected || changeMode) {
+        writes.push({ path, current, expected, data, localCopy:action === 'chmod',
+          ...(trackMode ? {mode, executable:exec} : {}) });
       }
     }
   }
@@ -318,13 +415,15 @@ async function compare(host, opts, key, next, otherOwners, base, derived, oldDir
     if (action !== 'unchanged') changes.push({path, action, conflict, type:'directory'});
   }
   const token = await host.sha256(encoder.encode(JSON.stringify([key, opts.manifest.version, checks, [...otherOwners].sort()])));
-  return { changes, conflicts, writes, token, unmanaged, preserved, directories, directoryOps };
+  return { changes, conflicts, writes, token, unmanaged, preserved, directories, directoryOps, renames };
 }
 
 async function restore(host, home, dir, journal) {
   for (const [index, item] of [...journal.operations.entries()].reverse()) {
     const path = relative(item.path);
-    if (!['file', 'modules', 'credential', 'directory'].includes(item.kind) ||
+    if (!['file', 'modules', 'credential', 'directory', 'case'].includes(item.kind) ||
+      item.kind === 'case' && (!managed(path, journal.profilesDir) || relative(item.from).toLowerCase() !== path.toLowerCase() ||
+        item.from.split('/').slice(0,-1).join('/') !== path.split('/').slice(0,-1).join('/')) ||
       item.kind === 'modules' && (path.split('/').length !== 3 || !path.endsWith('/node_modules')) ||
       item.kind === 'credential' && !credentialPath(path) ||
       (item.kind === 'file' || item.kind === 'directory') && !managed(path, journal.profilesDir)) {
@@ -335,7 +434,9 @@ async function restore(host, home, dir, journal) {
     }
     const dest = host.joinPath(home, path);
     const copy = host.joinPath(dir, 'old', String(index));
-    if (item.kind === 'directory') {
+    if (item.kind === 'case') {
+      await moveCase(host, home, path, item.from, true);
+    } else if (item.kind === 'directory') {
       const current = await typeAt(host, home, path);
       if (item.existed) {
         if (!current) await host.mkdir(dest);
@@ -404,24 +505,59 @@ async function recover(host, home, profilesDir, inspectOnly) {
 
 /** 在持有同一安装目录锁时恢复被中断的依赖、配置文件和安装记录。 */
 export async function recoverPackUpdate(host, home, profilesDir = 'profiles') {
+  if (!await typeAt(host, home, statePath + '/transaction')) return;
   await typeAt(host, home, statePath + '/locks');
   return host.withPackLock(host.joinPath(home, statePath), () => recover(host, home, segment(profilesDir), false));
 }
 
-async function commit(host, opts, key, next, plan, units, profilesDir, previousState, base) {
-  const home = opts.home;
-  const dir = host.joinPath(home, statePath, 'transaction');
-  const id = globalThis.crypto.randomUUID();
-  const operations = plan.writes.map(w => ({ path: w.path, existed: w.current !== null, kind: 'file' }));
-  operations.push(...plan.directoryOps);
-  const ready = new Set(previousState?.dependenciesReady ?? []);
+async function dependenciesPresent(host, home, unit) {
+  const dir = host.joinPath(home, unit);
+  const raw = await host.readTextFile(host.joinPath(dir, 'package.json'));
+  if (raw === null) return false;
+  let pkg;
+  try { pkg = JSON.parse(raw); } catch { return false; }
+  if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) return false;
+  const required = Object.entries(pkg.dependencies ?? {}).filter(([name]) => !own(pkg.optionalDependencies ?? {}, name));
+  if (!required.length) return true;
+  if (await typeAt(host, home, unit + '/node_modules') !== 'dir') return false;
+  for (const [name, spec] of required) {
+    if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/i.test(name)) throw new Error('无效的依赖名称：' + name);
+    const file = await host.readTextFile(host.joinPath(dir, 'node_modules', ...name.split('/'), 'package.json'));
+    if (file === null) return false;
+    try {
+      const installed = JSON.parse(file);
+      if (!installed || typeof installed !== 'object' || (isExactSemver(spec) && installed.version !== spec.trim())) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function planDependencies(host, opts, plan, units, state) {
+  const ready = new Set(state?.dependenciesReady ?? []), missing = [];
   for (const unit of units) {
+    if (ready.has(unit) && !await dependenciesPresent(host, opts.home, unit)) {
+      ready.delete(unit);
+      missing.push(unit);
+    }
     if (plan.writes.some(w => w.path.startsWith(unit + '/') &&
         /^(?:package\.json|pnpm-(lock|workspace)\.yaml|(?:vendor-blobs|\.dspack-sources)\/.+\.tgz)$/.test(w.path.slice(unit.length + 1)))) {
       ready.delete(unit);
     }
   }
   const deps = opts.finalize ? units.filter(unit => !ready.has(unit)) : [];
+  for (const unit of deps) plan.changes.push({path:unit + '/node_modules', action:'install', conflict:false});
+  if (missing.length) plan.token = await host.sha256(encoder.encode(JSON.stringify([plan.token,missing])));
+  return {ready, deps};
+}
+
+async function commit(host, opts, key, next, plan, units, profilesDir, {base, derived}, {ready, deps}) {
+  const home = opts.home;
+  const dir = host.joinPath(home, statePath, 'transaction');
+  const id = globalThis.crypto.randomUUID();
+  const operations = [...plan.renames, ...plan.writes.map(w => ({ path: w.path, existed: w.current !== null, kind: 'file' }))];
+  operations.push(...plan.directoryOps);
   for (const unit of deps) {
     const modules = unit + '/node_modules';
     const type = await typeAt(host, home, modules);
@@ -470,13 +606,18 @@ async function commit(host, opts, key, next, plan, units, profilesDir, previousS
     await host.writeTextFile(host.joinPath(dir, 'journal.tmp'), JSON.stringify(journal));
     await host.move(host.joinPath(dir, 'journal.tmp'), host.joinPath(dir, 'journal.json'));
     for (const [index, item] of operations.entries()) {
-      if (item.kind === 'modules' && item.existed) {
+      if (item.kind === 'case') {
+        await mark(index);
+        await moveCase(host, home, item.from, item.path);
+      } else if (item.kind === 'modules' && item.existed) {
         await mark(index);
         await host.move(host.joinPath(home, item.path), host.joinPath(dir, 'old', String(index)));
       }
     }
-    for (const [index, write] of plan.writes.entries()) {
-      if (await fileState(host, home, write.path) !== write.current) {
+    for (const [offset, write] of plan.writes.entries()) {
+      const index = plan.renames.length + offset;
+      if (await fileState(host, home, write.path) !== write.current ||
+        (write.mode != null && await host.packFileMode(host.joinPath(home, write.path)) !== write.mode)) {
         throw new Error('文件在预览后发生变化：' + write.path);
       }
       const dest = host.joinPath(home, write.path);
@@ -488,7 +629,14 @@ async function commit(host, opts, key, next, plan, units, profilesDir, previousS
         if (write.data) {
           await host.writeFile(temp, write.data);
         } else {
-          await host.copyPackFile(host.joinPath(opts.stagedHome, write.path), temp);
+          await host.copyPackFile(host.joinPath(write.localCopy ? home : opts.stagedHome, write.path), temp);
+        }
+        if (write.executable !== undefined) {
+          const sourceMode = write.mode ?? await host.packFileMode(temp);
+          if (sourceMode !== null) {
+            const bits = write.executable ? (sourceMode & 0o111) || (0o100 | ((sourceMode & 0o044) >> 2)) : 0;
+            await host.chmodPackFile(temp, (sourceMode & 0o666) | bits);
+          }
         }
         if (await host.sha256File(temp) !== write.expected) {
           throw new Error('暂存内容在预览后发生变化：' + write.path);
@@ -526,6 +674,7 @@ async function commit(host, opts, key, next, plan, units, profilesDir, previousS
         ready.add(unit);
       }
     }
+    if (opts.verifyMcp) await opts.verifyMcp();
     if (opts.commitCredentials) {
       for (const [index,item] of operations.entries()) {
         if (item.kind === 'credential' || units.some(unit => item.path === unit + '/cordis.patch.yml')) {
@@ -540,7 +689,7 @@ async function commit(host, opts, key, next, plan, units, profilesDir, previousS
         files[path] = base[path];
       }
     }
-    const derivedLocks = { ...previousState?.derivedLocks };
+    const derivedLocks = { ...derived };
     for (const unit of deps) {
       const lock = unit + '/pnpm-lock.yaml';
       const hash = await fileState(host, home, lock);
@@ -575,8 +724,8 @@ export async function syncPackTree(host, opts) {
     throw new Error('更新需要独立的暂存目录和明确的安装模式');
   }
   const { type, units } = fields(manifest, opts.profileName, profilesDir);
-  const key = await host.sha256(encoder.encode(type === 'profile' ? 'profile/' + units[0].toLowerCase() : 'dshhome'));
-  const next = await stageFiles(host, stagedHome, profilesDir);
+  const key = await baselineKey(host, type, units);
+  const next = await stageFiles(host, stagedHome, profilesDir, opts.executablePaths);
   await typeAt(host, home, statePath + '/locks');
   async function run() {
     await recover(host, home, profilesDir, opts.dryRun);
@@ -596,7 +745,9 @@ export async function syncPackTree(host, opts) {
       base = await stageFiles(host, previous.stagedHome, profilesDir);
     }
     const owners = await sharedPaths(host, home, key, profilesDir);
-    const plan = await compare(host, opts, key, next, owners, base ?? {}, state?.derivedLocks ?? {}, state?.directories ?? {}, profilesDir);
+    const aligned = await alignCase(host, opts, base ?? {}, state?.directories ?? {}, state?.derivedLocks ?? {}, next);
+    const plan = await compare(host, opts, key, next, owners, aligned.base, aligned.derived, aligned.oldDirs, profilesDir, aligned.renames);
+    const dependencies = await planDependencies(host, opts, plan, units, state);
     const choices = opts.resolutions ?? {};
     if (opts.previewToken && opts.previewToken !== plan.token) {
       throw new Error('安装内容或本地文件已变化，请重新预览');
@@ -614,13 +765,11 @@ export async function syncPackTree(host, opts) {
     if (opts.dryRun) {
       return result;
     }
-    await commit(host, opts, key, next, plan, units, profilesDir, state, base ?? {});
+    await commit(host, opts, key, next, plan, units, profilesDir, aligned, dependencies);
     return { ...result, applied: true };
   }
   if (opts.dryRun) {
-    if (opts.recoverInterrupted && await typeAt(host, home, statePath + '/transaction')) {
-      await recoverPackUpdate(host, home, profilesDir);
-    }
+    if (opts.recoverInterrupted) await recoverPackUpdate(host, home, profilesDir);
     return run();
   }
   const homeExisted = await host.packEntryType(home);

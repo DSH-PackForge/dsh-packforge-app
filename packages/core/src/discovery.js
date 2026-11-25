@@ -114,6 +114,34 @@ export async function discoverHomes(host, opts = {}) {
   return homes;
 }
 
+
+/** 仅在目标 HOME 或整合包版本能确定本机 DSH 安装时，返回解析内置 bundle 的 package.json。 */
+export async function findLauncherInstallAnchor(host, home, version) {
+  const config = await readLauncherConfig(host);
+  if (!Array.isArray(config?.versions)) return undefined;
+  const key = path => {
+    const abs = host.resolvePath(path);
+    return abs.includes('\\') ? abs.toLowerCase() : abs;
+  };
+  const target = key(home);
+  const homes = new Set((Array.isArray(config.homes) ? config.homes : [])
+    .filter(row => typeof row?.path === 'string' && row.path && key(row.path) === target)
+    .map(row => row.id));
+  const active = new Set((Array.isArray(config.instances) ? config.instances : [])
+    .filter(row => row && homes.has(row.home_id)).map(row => row.version_id));
+  if (!active.size && !version) return undefined;
+  const matches = config.versions.filter(row => row && !row.wsl && typeof row.dir === 'string' && row.dir &&
+    (!active.size || active.has(row.id)) && (!version || row.version === version));
+  const dirs = [...new Set(matches.map(row => host.resolvePath(row.dir)))];
+  if (dirs.length !== 1) return undefined;
+  for (const location of ['apps/cli/package.json', 'node_modules/@deepseek-ai/dsh/package.json']) {
+    const anchor = host.joinPath(dirs[0], location);
+    const pkg = await readJson(host, anchor);
+    if (pkg?.name === '@deepseek-ai/dsh' && (!version || pkg.version === version)) return anchor;
+  }
+  return undefined;
+}
+
 /** 枚举启动器已安装的 DSH 版本（精确版本号），降序。 */
 export async function listInstalledDshVersions(host, opts = {}) {
   const cfg = await readLauncherConfig(host, opts.launcherConfig);

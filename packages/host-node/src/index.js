@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
+import { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 
 export class NodeHost {
@@ -14,6 +15,12 @@ export class NodeHost {
 
   joinPath(...parts) {
     return path.join(...parts);
+  }
+
+  /** 以随本工具分发的 Cordis 实现组合独立的补丁副本。 */
+  composePackEntries(patches) {
+    const result = applyEntryPatches([], patches, () => {});
+    return Array.isArray(result) ? result : result.data;
   }
 
   resolvePath(...parts) {
@@ -310,6 +317,22 @@ export class NodeHost {
   }
 
   /** 更新前必须区分路径缺失、权限错误与符号链接。 */
+  /** 返回普通文件的 POSIX 权限；Windows 无法表达 Git 执行位。 */
+  async packFileMode(abs) {
+    if (process.platform === 'win32') return null;
+    const stat = await fsp.lstat(abs);
+    if (!stat.isFile()) throw new Error('权限目标必须是普通文件');
+    return stat.mode & 0o777;
+  }
+
+  /** 仅在具有 POSIX 权限的文件系统设置普通文件的访问位。 */
+  async chmodPackFile(abs, mode) {
+    if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new Error('无效的文件权限');
+    if (process.platform === 'win32') return;
+    if (!(await fsp.lstat(abs)).isFile()) throw new Error('权限目标必须是普通文件');
+    await fsp.chmod(abs, mode);
+  }
+
   async packEntryType(abs) {
     try {
       const entry = await fsp.lstat(abs);

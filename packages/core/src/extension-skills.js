@@ -72,7 +72,14 @@ export async function checkoutSkill(host, source, id) {
     await git(['checkout','--quiet','--detach',commit]);
     const dir = await findSkill(host, temp, config.subdir, id);
     const files = await readTree(host, dir, {rejectLinks:true});
-    return { ...config, commit, files, digest: await digestFiles(host, files) };
+    const tree = await git(['-C',dir,'ls-tree','-r','-z',commit,'--','.']);
+    const executables = new Set();
+    for (const entry of tree.split('\0')) {
+      const tab = entry.indexOf('\t');
+      const path = entry.slice(tab+1);
+      if (entry.startsWith('100755 blob ') && tab !== -1 && files.has(path)) executables.add(path);
+    }
+    return { ...config, commit, files, executables, digest: await digestFiles(host, files) };
   } finally { await host.rm(temp, {recursive:true,force:true}); }
 }
 
@@ -152,5 +159,6 @@ export async function exportSkill(host, root, candidate, choice) {
     }
     if (await digestFiles(host,local) !== baseline) throw new Error('本地技能内容与来源不同，请选择内嵌：' + id);
   }
-  return { ...fetched, files:null };
+  const {executables, ...metadata} = fetched;
+  return { ...metadata, files:null };
 }
