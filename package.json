@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.1",
   "type": "module",
-  "description": "DSH-PackForge 图形化整合包管理工具（manifest v5 + .dspack / pack-structure v3）",
+  "description": "DSH-PackForge 图形化整合包管理工具（manifest v6 + .dspack / pack-structure v4）",
   "license": "MIT",
   "engines": {
     "node": ">=20"

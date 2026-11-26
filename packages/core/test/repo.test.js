@@ -39,7 +39,7 @@ test('exportRepo：manifest 档只写清单 + .gitignore，仓库名不带版本
     assert.ok(r.dir.endsWith('my-web')); // 不带 -1.2.3
 
     const m = JSON.parse(await host.readTextFile(host.joinPath(r.dir, 'manifest.json')));
-    assert.equal(m.manifestVersion, 5);
+    assert.equal(m.manifestVersion, 6);
     assert.equal(m.type, 'profile');
     assert.equal(m.dshVersion, '0.1.1-rc.2');
     assert.equal(m.dependencies['dsh-pet'], '0.2.0');
@@ -144,4 +144,24 @@ test('exportRepo：非法 content 回退 readme', async () => {
   } finally {
     await host.rm(root, { recursive: true, force: true }).catch(() => {});
   }
+});
+
+test('重新导出完整源码时撤下取消选择的技能，保留作者添加的文件', async t => {
+  const host = new NodeHost();
+  const root = await host.mkdtemp('pack-source-test-');
+  t.after(() => host.rm(root, {recursive:true, force:true}));
+  const home = host.joinPath(root,'author');
+  const profile = {name:'demo', dir:host.joinPath(home,'profiles','demo')};
+  await host.writeTextFile(host.joinPath(profile.dir,'package.json'),'{}');
+  await host.writeTextFile(host.joinPath(home,'skills','guide','SKILL.md'),'# guide\n');
+  const options = {out:root, content:'full', selection:{skills:['skill:home:guide']}};
+  const first = await exportRepo(host,profile,options);
+  assert.equal(first.manifest.resources['skill.json'][0].id,'guide');
+  const source = JSON.parse(await host.readTextFile(host.joinPath(first.dir,'skill.json')));
+  const blob = source.items[0].files[0].entry;
+  await host.writeTextFile(host.joinPath(first.dir,'notes.md'),'作者笔记');
+  await exportRepo(host,profile,{...options, version:'2', selection:{}});
+  assert.equal(await host.stat(host.joinPath(first.dir,'skill.json')),null);
+  assert.equal(await host.stat(host.joinPath(first.dir,blob)),null);
+  assert.equal(await host.readTextFile(host.joinPath(first.dir,'notes.md')),'作者笔记');
 });

@@ -141,6 +141,16 @@ export class DshPluginHost extends Host {
     return this.sha256(data);
   }
 
+  async writeCredentialStore(path, text) {
+    if (!this.bridge?.writeCredentialStore) throw new Error('当前宿主未提供私有凭据存储');
+    return this.bridge.writeCredentialStore(path, text);
+  }
+
+  async git(args, opts) {
+    if (!this.bridge?.git) throw new Error('当前宿主未提供 Git，无法获取远程技能');
+    return this.bridge.git(args, opts);
+  }
+
   async exec(cmd, args, opts) {
     const b = this.bridge;
     if (!b || typeof b.exec !== 'function') {
@@ -149,8 +159,46 @@ export class DshPluginHost extends Host {
     return b.exec(cmd, args, opts);
   }
 
-  async download(url, destAbs) {
-    await this.requireBridge().download(url, destAbs);
+  async download(url, destAbs, options) {
+    await this.requireBridge().download(url, destAbs, options);
+  }
+
+  /** 更新在持有宿主目录锁期间执行，客户端沙箱通过宿主 CLI 调用。 */
+  async withPackLock(directory, action) {
+    const bridge = this.requireBridge();
+    if (!bridge.withPackLock) {
+      throw new Error('此文件桥不支持跨进程更新锁，请使用宿主 CLI');
+    }
+    return bridge.withPackLock(directory, action);
+  }
+
+  async packEntryType(abs) {
+    const bridge = this.requireBridge();
+    if (!bridge.packEntryType) {
+      throw new Error('此文件桥不支持更新所需的路径检查，请使用宿主 CLI');
+    }
+    return bridge.packEntryType(abs);
+  }
+
+  async packFileMode(abs) {
+    return this.requireBridge().packFileMode(abs);
+  }
+
+  /** 通过具备 Cordis 的宿主组合补丁，浏览器端无需加载服务端模块。 */
+  async composePackEntries(patches) {
+    return this.requireBridge().composePackEntries(patches);
+  }
+
+  async chmodPackFile(abs, mode) {
+    return this.requireBridge().chmodPackFile(abs, mode);
+  }
+
+  async removePackDirIfEmpty(abs) {
+    return this.requireBridge().removePackDirIfEmpty(abs);
+  }
+
+  async copyPackFile(from, to, privateCopy) {
+    return this.requireBridge().copyPackFile(from, to, privateCopy);
   }
 
   async move(from, to) {

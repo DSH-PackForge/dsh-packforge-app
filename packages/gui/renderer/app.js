@@ -1,3 +1,4 @@
+import { chooseExportResources, reviewInstall } from './v6-dialogs.js';
 // 渲染进程逻辑（浏览器 ESM，仅依赖纯展示模块 format.js + Electron 桥 window.packforge）。
 import { packViewHTML, marketCardHTML, exportResultHTML, exportRepoResultHTML } from '../src/format.js';
 
@@ -86,7 +87,13 @@ async function loadPackPreview() {
   $('pack-preview-out').innerHTML = '<p class="muted">解析中…</p>';
   try {
     const r = await bridge.viewPack(source);
-    $('pack-preview-out').innerHTML = packViewHTML(r);
+    const panel = $('pack-preview-out');
+    panel.innerHTML = packViewHTML(r);
+    for (const icon of panel.querySelectorAll('img[src^="https://cdn.jsdelivr.com/npm/"]')) {
+      const fallback = () => { icon.src = icon.src.replace('https://cdn.jsdelivr.com/npm/', 'https://cdn.jsdelivr.net/npm/'); };
+      if (icon.complete && !icon.naturalWidth) fallback();
+      else icon.addEventListener('error', fallback, {once:true});
+    }
     install.hidden = false;
     // 按解析出的 type 自动显示对应安装字段（无需手选 Profile / DSH_HOME）
     const isHome = r.manifest?.type === 'dshhome';
@@ -150,6 +157,7 @@ async function initExport() {
   vsel.innerHTML = '<option value="">自动（最新已装）</option>'
     + versions.map((v) => `<option value="${escape(v)}">${escape(v)}</option>`).join('');
 
+  if (currentProfile()) await loadExportCfg();
   onModeChange();
 }
 
@@ -158,8 +166,26 @@ function currentProfile() {
   return exportProfiles.find((p) => p.dir === dir) ?? null;
 }
 
+let profileResources = {}, homeResources = {};
+
+async function editResources(whole) {
+  const who = whole ? currentHome() : currentProfile();
+  if (!who) return setStatus('请先选择导出目标', 'err');
+  const current = whole ? homeResources : profileResources;
+  try {
+    const { candidates, units } = await bridge.exportChoices(whole ? {home: who, ...current} : {profile: who, ...current});
+    const next = await chooseExportResources(candidates, units, current, whole);
+    if (!next) return;
+    if (whole) homeResources = next;
+    else profileResources = next;
+    if (whole) await updateHomePreview();
+    else await updatePreview();
+  } catch (error) { setStatus(error.message, 'err'); }
+}
+
 function exportOpts() {
   return {
+    ...profileResources,
     name: $('export-name').value.trim() || undefined,
     version: $('export-version').value.trim() || undefined,
     displayName: $('export-display').value.trim() || undefined,
@@ -201,16 +227,13 @@ function categorizeHomeFiles(files) {
 }
 
 function renderHomeContentSwitches() {
-  $('export-skill-count').textContent = homeCats.skills.length ? `（${homeCats.skills.length} 个）` : '（无）';
   $('export-preset-count').textContent = homeCats.presets.length ? `（${homeCats.presets.length} 个）` : '（无）';
-  $('export-skill').disabled = !homeCats.skills.length;
   $('export-preset').disabled = !homeCats.presets.length;
   $('export-instruction').disabled = !homeCats.instructions.length;
 }
 
 function homeIncludeFromSwitches() {
   const rels = [];
-  if ($('export-skill').checked) for (const rs of homeCats.skills) rels.push(...rs);
   if ($('export-preset').checked) for (const rs of homeCats.presets) rels.push(...rs);
   if ($('export-instruction').checked) rels.push(...homeCats.instructions);
   return rels.length ? rels : undefined;
@@ -239,7 +262,7 @@ async function updatePreview() {
     const m = ins.manifest;
     const parts = [`${m.name}@${m.version}`];
     if ((m.bundles ?? []).length) parts.push(`${m.bundles.length} 个 bundle`);
-    if (homeCats.skills.length) parts.push(`${homeCats.skills.length} 个 skill`);
+    if (profileResources.selection?.skills?.length) parts.push(profileResources.selection.skills.length + ' 个技能');
     if (homeCats.presets.length) parts.push(`${homeCats.presets.length} 个预设`);
     if (homeCats.instructions.length) parts.push('含全局指令');
     summary.textContent = '将导出：' + parts.join(' · ');
@@ -328,6 +351,7 @@ function renderHomeSel() {
 async function initExportHome() {
   try { exportHomes = await bridge.listHomes(); } catch { exportHomes = []; }
   renderHomeSel();
+  if (currentHome()) await loadHomeCfg();
   const vsel = $('home-dsh');
   let versions = [];
   try { versions = await bridge.listDshVersions(); } catch { /* 忽略 */ }
@@ -369,9 +393,7 @@ function categorizeHomeContent(files) {
 }
 
 function renderHomeSwitches() {
-  $('home-skill-count').textContent = homeContent.skills.length ? `（${homeContent.skills.length} 个）` : '（无）';
   $('home-preset-count').textContent = homeContent.presets.length ? `（${homeContent.presets.length} 个）` : '（无）';
-  $('home-skill').disabled = !homeContent.skills.length;
   $('home-preset').disabled = !homeContent.presets.length;
   $('home-instruction').disabled = !homeContent.instructions.length;
   $('home-data').disabled = !homeContent.data.length;
@@ -379,7 +401,6 @@ function renderHomeSwitches() {
 
 function homeExcludeFromSwitches() {
   const excludes = [];
-  if (!$('home-skill').checked) excludes.push('skills/');
   if (!$('home-preset').checked) excludes.push('.agent-presets/');
   if (!$('home-instruction').checked) excludes.push('AGENTS.md');
   if (!$('home-data').checked) excludes.push('data/');
@@ -401,7 +422,7 @@ async function updateHomePreview() {
     renderHomeSwitches();
     const profiles = Object.keys(ins.manifest?.profiles ?? {});
     const parts = [`${ins.manifest?.name}@${ins.manifest?.version}`, `${profiles.length} 个 profile`];
-    if (homeContent.skills.length) parts.push(`${homeContent.skills.length} 个 skill`);
+    if (homeResources.selection?.skills?.length) parts.push(homeResources.selection.skills.length + ' 个技能');
     if (homeContent.presets.length) parts.push(`${homeContent.presets.length} 个预设`);
     if (homeContent.instructions.length) parts.push('含全局指令');
     if (homeContent.data.length) parts.push(`${homeContent.data.length} 个数据文件`);
@@ -424,6 +445,7 @@ async function doExportHome() {
   result.hidden = true;
   try {
     const r = await bridge.exportHome({
+      ...homeResources,
       home: { name: h.name, dir: h.dir },
       name: $('home-name').value.trim() || undefined,
       version: $('home-version').value.trim() || undefined,
@@ -451,7 +473,21 @@ async function doExportHome() {
 }
 
 /* ---- 导入 ---- */
-async function doImport() {
+function installSummary(result) {
+  const lines = [result.dir];
+  for (const item of result.items || []) {
+    const status = item.skipped ? '跳过' : (result.dryRun ? '将安装' : '已处理');
+    lines.push(status + ' · ' + item.id + (item.destination ? ' → ' + item.destination : ''));
+    if (item.notice) lines.push('  ' + item.notice);
+  }
+  for (const change of result.changes || []) {
+    lines.push(change.action + ' · ' + change.path);
+  }
+  if (result.conflicts?.length) lines.push('本地与新版同时修改 ' + result.conflicts.length + ' 项');
+  return lines.join('\n');
+}
+
+async function doImport(update = false) {
   const source = $('pack-source').value.trim();
   if (!source) return setStatus('请先选择整合包文件', 'err');
   const integrity = pendingIntegrity && pendingIntegrity.source === source ? pendingIntegrity : null;
@@ -465,18 +501,19 @@ async function doImport() {
   };
   $('import-out').textContent = '';
   try {
-    const r = await bridge.installPack(opts);
-    $('import-out').textContent = r.dryRun
-      ? `（预览）会安装为 Profile「${r.profileName}」到 ${r.dir}${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`
-      : `✓ 已安装：${r.profileName}\n${r.dir}\nfiles 下载 ${r.filesDownloaded} 个`;
-    setStatus(r.dryRun ? '预览完成' : '安装完成', 'ok');
+    opts.update = update === true;
+    const reviewed = await reviewInstall((args) => bridge.installPack(args), opts);
+    if (!reviewed) return;
+    const r = opts.dryRun ? reviewed : await bridge.installPack(reviewed);
+    $('import-out').textContent = installSummary(r);
+    setStatus(r.dryRun ? '预览完成' : r.updated ? '更新完成' : '安装完成', 'ok');
   } catch (e) {
     $('import-out').textContent = '✗ ' + e.message;
     setStatus(e.message, 'err');
   }
 }
 
-async function doImportHome() {
+async function doImportHome(update = false) {
   const source = $('pack-source').value.trim();
   if (!source) return setStatus('请先选择整合包文件', 'err');
   const integrity = pendingIntegrity && pendingIntegrity.source === source ? pendingIntegrity : null;
@@ -489,17 +526,12 @@ async function doImportHome() {
   };
   $('import-home-out').textContent = '';
   try {
-    const r = await bridge.installPack(opts);
-    if (r.dryRun) {
-      $('import-home-out').textContent = r.type === 'dshhome'
-        ? `（预览）会安装为 DSH_HOME 到 ${r.dir}\n  profile: ${r.profiles.join(', ')}（默认 ${r.defaultProfile}）${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`
-        : `（预览）会安装为 Profile「${r.profileName}」到 ${r.dir}${r.exists ? '\n（目标已存在，真实安装需 --force）' : ''}`;
-    } else {
-      $('import-home-out').textContent = r.type === 'dshhome'
-        ? `✓ 已安装 DSH_HOME：${r.dir}\n  profile: ${r.profiles.join(', ')}（默认 ${r.defaultProfile}）\nfiles 下载 ${r.filesDownloaded} 个`
-        : `✓ 已安装：${r.profileName}\n${r.dir}\nfiles 下载 ${r.filesDownloaded} 个`;
-    }
-    setStatus(r.dryRun ? '预览完成' : '安装完成', 'ok');
+    opts.update = update === true;
+    const reviewed = await reviewInstall((args) => bridge.installPack(args), opts);
+    if (!reviewed) return;
+    const r = opts.dryRun ? reviewed : await bridge.installPack(reviewed);
+    $('import-home-out').textContent = installSummary(r);
+    setStatus(r.dryRun ? '预览完成' : r.updated ? '更新完成' : '安装完成', 'ok');
   } catch (e) {
     $('import-home-out').textContent = '✗ ' + e.message;
     setStatus(e.message, 'err');
@@ -529,6 +561,7 @@ const cfgSet = (id, v) => { if (v != null && v !== '') $(id).value = v; };
 
 function exportCfg() {
   return {
+    ...profileResources,
     name: $('export-name').value.trim(),
     version: $('export-version').value.trim(),
     displayName: $('export-display').value.trim(),
@@ -541,7 +574,6 @@ function exportCfg() {
     content: $('export-content').value,
     out: $('export-out').value.trim(),
     exportContent: {
-      skill: $('export-skill').checked,
       preset: $('export-preset').checked,
       instruction: $('export-instruction').checked,
     },
@@ -549,6 +581,7 @@ function exportCfg() {
 }
 
 function applyExportCfg(cfg) {
+  profileResources = { selection: cfg?.selection, plugins: cfg?.plugins };
   if (!cfg) return;
   cfgSet('export-name', cfg.name);
   cfgSet('export-version', cfg.version);
@@ -562,7 +595,6 @@ function applyExportCfg(cfg) {
   cfgSet('export-content', cfg.content);
   cfgSet('export-out', cfg.out);
   if (cfg.exportContent) {
-    $('export-skill').checked = cfg.exportContent.skill !== false;
     $('export-preset').checked = cfg.exportContent.preset !== false;
     $('export-instruction').checked = cfg.exportContent.instruction === true;
   }
@@ -573,6 +605,7 @@ async function loadExportCfg() {
   if (!p) return setStatus('未选择 Profile', 'err');
   try {
     const cfg = await bridge.loadCfg(p.dir);
+    if (currentProfile()?.dir !== p.dir) return;
     applyExportCfg(cfg);
     setStatus(cfg ? '已读取保存的配置' : '无已保存的配置', cfg ? 'ok' : '');
   } catch { setStatus('读取配置失败', 'err'); }
@@ -580,6 +613,7 @@ async function loadExportCfg() {
 
 function homeCfg() {
   return {
+    ...homeResources,
     name: $('home-name').value.trim(),
     version: $('home-version').value.trim(),
     displayName: $('home-display').value.trim(),
@@ -590,7 +624,6 @@ function homeCfg() {
     dshVersion: $('home-dsh').value,
     out: $('home-out').value.trim(),
     exportContent: {
-      skill: $('home-skill').checked,
       preset: $('home-preset').checked,
       instruction: $('home-instruction').checked,
       data: $('home-data').checked,
@@ -599,6 +632,7 @@ function homeCfg() {
 }
 
 function applyHomeCfg(cfg) {
+  homeResources = { selection: cfg?.selection, profilePlugins: cfg?.profilePlugins };
   if (!cfg) return;
   cfgSet('home-name', cfg.name);
   cfgSet('home-version', cfg.version);
@@ -610,7 +644,6 @@ function applyHomeCfg(cfg) {
   cfgSet('home-dsh', cfg.dshVersion);
   cfgSet('home-out', cfg.out);
   if (cfg.exportContent) {
-    $('home-skill').checked = cfg.exportContent.skill !== false;
     $('home-preset').checked = cfg.exportContent.preset !== false;
     $('home-instruction').checked = cfg.exportContent.instruction !== false;
     $('home-data').checked = cfg.exportContent.data !== false;
@@ -622,37 +655,38 @@ async function loadHomeCfg() {
   if (!h) return setStatus('未选择 DSH_HOME', 'err');
   try {
     const cfg = await bridge.loadCfg(h.dir);
+    if (currentHome()?.dir !== h.dir) return;
     applyHomeCfg(cfg);
     setStatus(cfg ? '已读取保存的配置' : '无已保存的配置', cfg ? 'ok' : '');
   } catch { setStatus('读取配置失败', 'err'); }
 }
 
-function saveExportCfg() {
-  const p = currentProfile();
-  if (!p) return setStatus('未选择 Profile', 'err');
-  bridge.saveCfg(p.dir, exportCfg());
-  setStatus('已保存配置', 'ok');
+async function saveCfg(target, config) {
+  if (!target) { setStatus('请先选择导出目录', 'err'); return false; }
+  try {
+    await bridge.saveCfg(target.dir, config);
+    setStatus('已保存配置', 'ok');
+    return true;
+  } catch (error) { setStatus(error.message, 'err'); return false; }
 }
 
-function saveHomeCfg() {
-  const h = currentHome();
-  if (!h) return setStatus('未选择 DSH_HOME', 'err');
-  bridge.saveCfg(h.dir, homeCfg());
-  setStatus('已保存配置', 'ok');
-}
+const saveExportCfg = () => saveCfg(currentProfile(), exportCfg());
+const saveHomeCfg = () => saveCfg(currentHome(), homeCfg());
 
 async function saveAndExport() {
-  saveExportCfg();
-  await doExport();
+  if (await saveExportCfg()) await doExport();
 }
 
 async function saveAndExportHome() {
-  saveHomeCfg();
-  await doExportHome();
+  if (await saveHomeCfg()) await doExportHome();
 }
 
 /* ---- boot ---- */
 function init() {
+  $('export-choices').onclick = () => editResources(false);
+  $('home-choices').onclick = () => editResources(true);
+  $('profile-update').onclick = () => doImport(true);
+  $('home-update').onclick = () => doImportHome(true);
   bindTabs();
   $('market-reload').addEventListener('click', () => refreshMarket());
   $('market-local').addEventListener('click', async () => {
@@ -689,8 +723,8 @@ function init() {
   $('export-load').addEventListener('click', loadExportCfg);
   $('export-save').addEventListener('click', saveExportCfg);
   $('export-save-go').addEventListener('click', saveAndExport);
-  $('export-home').addEventListener('change', () => { renderProfiles(); updatePreview(); });
-  $('export-profile').addEventListener('change', () => { loadExportCfg(); updatePreview(); });
+  $('export-home').addEventListener('change', async () => { renderProfiles(); profileResources = {}; await loadExportCfg(); updatePreview(); });
+  $('export-profile').addEventListener('change', async () => { profileResources = {}; await loadExportCfg(); updatePreview(); });
   $('export-name').addEventListener('change', updatePreview);
   $('export-version').addEventListener('change', updatePreview);
   $('export-display').addEventListener('change', updatePreview);
@@ -699,7 +733,6 @@ function init() {
   $('export-icon').addEventListener('change', updatePreview);
   $('export-profilename').addEventListener('change', updatePreview);
   $('export-dsh').addEventListener('change', updatePreview);
-  $('export-skill').addEventListener('change', updatePreview);
   $('export-preset').addEventListener('change', updatePreview);
   $('export-instruction').addEventListener('change', updatePreview);
   $('export-mode').addEventListener('change', onModeChange);
@@ -727,8 +760,7 @@ function init() {
   document.querySelectorAll('[data-export-tab]').forEach((btn) => {
     btn.addEventListener('click', () => switchExportTab(btn.dataset.exportTab));
   });
-  $('home-sel').addEventListener('change', () => { loadHomeCfg(); updateHomePreview(); });
-  $('home-skill').addEventListener('change', updateHomePreview);
+  $('home-sel').addEventListener('change', async () => { homeResources = {}; await loadHomeCfg(); updateHomePreview(); });
   $('home-preset').addEventListener('change', updateHomePreview);
   $('home-instruction').addEventListener('change', updateHomePreview);
   $('home-data').addEventListener('change', updateHomePreview);

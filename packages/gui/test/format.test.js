@@ -64,10 +64,10 @@ test('treeFromPaths：嵌套目录', () => {
 
 test('marketCardHTML：格式徽章 + 展示名 + 描述', () => {
   const html = marketCardHTML({
-    name: 'web', displayName: '网页开发', version: '1.0.0', description: 'desc', format: 'dspack', dshVersion: '0.1.1-rc.2', size: 11172, sha256: 'abc', downloadUrl: 'https://x/web.dspack',
+    name: 'web', displayName: '网页开发', version: '1.0.0', description: 'desc', format: 'dspack', manifestVersion: 6, dshVersion: '0.1.1-rc.2', size: 11172, sha256: 'abc', downloadUrl: 'https://x/web.dspack',
   });
   assert.match(html, /网页开发/);
-  assert.match(html, /\.dspack v5/);
+  assert.match(html, /\.dspack · manifest v6/);
   assert.match(html, /desc/);
   assert.match(html, /card-install/);
   assert.match(html, /data-url="https:\/\/x\/web\.dspack"/);

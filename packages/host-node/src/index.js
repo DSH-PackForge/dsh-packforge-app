@@ -7,13 +7,20 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { spawn, spawnSync } from 'node:child_process';
+import { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 
 export class NodeHost {
   #rootCAs;
 
   joinPath(...parts) {
     return path.join(...parts);
+  }
+
+  /** 以随本工具分发的 Cordis 实现组合独立的补丁副本。 */
+  composePackEntries(patches) {
+    const result = applyEntryPatches([], patches, () => {});
+    return Array.isArray(result) ? result : result.data;
   }
 
   resolvePath(...parts) {
@@ -119,6 +126,38 @@ export class NodeHost {
     }
   }
 
+  async writeCredentialStore(dest, text) {
+    await fsp.mkdir(path.dirname(dest), {recursive:true});
+    let file, created = false;
+    try {
+      file = await fsp.open(dest, 'wx+', 0o600);
+      created = true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      file = await fsp.open(dest, 'r+');
+    }
+    try {
+      if (process.platform !== 'win32') await file.chmod(0o600);
+      else if (created) {
+        const current = spawnSync('whoami.exe', ['/user','/fo','csv','/nh'], {encoding:'utf8',windowsHide:true,timeout:5000});
+        const sid = current.stdout?.match(/S-1-(?:\d+-)+\d+/i)?.[0];
+        const acl = sid && spawnSync('icacls.exe', [dest,'/inheritance:r','/grant:r','*'+sid+':F'], {windowsHide:true,timeout:5000});
+        if (!acl || acl.status !== 0) throw new Error('无法限制凭据文件的 Windows 访问权限');
+      }
+      await file.truncate(0);
+      await file.writeFile(text, 'utf8');
+    } finally { await file.close(); }
+  }
+
+  async git(args, { cwd } = {}) {
+    return new Promise((resolve) => {
+      execFile('git', args, {
+        cwd, windowsHide: true, timeout: 120000, maxBuffer: 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: 'https:ssh' },
+      }, (error, stdout) => resolve({ status: error ? 1 : 0, stdout: String(stdout).trim() }));
+    });
+  }
+
   async exec(cmd, args, opts = {}) {
     // 用异步 spawn（而非 spawnSync）：避免在 Electron 主进程同步阻塞导致界面卡死；
     // stdin 置 ignore 防止 pnpm/git 在无人输入时卡在交互提示；可选 timeoutMs 兜底防永久卡住。
@@ -163,16 +202,16 @@ export class NodeHost {
     });
   }
 
-  async download(url, destAbs) {
+  async download(url, destAbs, { headers = {}, redirectHeaders } = {}) {
     try {
-      await this.#downloadOnce(url, destAbs, null);
+      await this.#downloadOnce(url, destAbs, null, headers, redirectHeaders);
     } catch (e) {
       // Windows 上部分站点（如 github.com）的证书链只认系统根 CA，Node bundled CA 认不到时
       // 自动加载系统根 CA 重试一次（信任系统信任存储，而非禁用校验）。
       if (this.#isCertError(e)) {
         const cas = await this.#systemRootCAs();
         if (cas && cas.length) {
-          await this.#downloadOnce(url, destAbs, cas);
+          await this.#downloadOnce(url, destAbs, cas, headers, redirectHeaders);
           return;
         }
       }
@@ -180,22 +219,31 @@ export class NodeHost {
     }
   }
 
-  async #downloadOnce(url, destAbs, extraCa) {
+  async #downloadOnce(url, destAbs, extraCa, headers, redirectHeaders, redirects = 0) {
     await new Promise((resolve, reject) => {
       let u;
       try {
         u = new URL(url);
       } catch {
-        return reject(new Error(`无效的下载地址：${url}`));
+        return reject(new Error(`无效的下载地址`));
       }
       const lib = u.protocol === 'https:' ? https : u.protocol === 'http:' ? http : null;
-      if (!lib) return reject(new Error(`仅支持 http/https：${url}`));
-      const options = { headers: { 'user-agent': 'dspack/0.1.0' } };
+      if (!lib) return reject(new Error(`仅支持 HTTP 或 HTTPS`));
+      const options = { headers: { ...headers, 'user-agent': 'dspack/0.1.0' } };
       if (extraCa) options.ca = extraCa;
       const req = lib.get(url, options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
-          return resolve(this.#downloadOnce(new URL(res.headers.location, u).href, destAbs, extraCa));
+          if (redirects >= 8) return reject(new Error('下载重定向次数超限'));
+          let next;
+          try { next = new URL(res.headers.location, u); } catch { return reject(new Error('下载重定向地址无效')); }
+          if (next.username || next.password) return reject(new Error('下载地址不得包含凭据'));
+          const sameOrigin = next.origin === u.origin;
+          const authorize = sameOrigin ? redirectHeaders : undefined;
+          const nextHeaders = authorize ? authorize(next.href) : sameOrigin && next.pathname === u.pathname ? headers : {};
+          return resolve(Promise.resolve(nextHeaders).then(scoped =>
+            this.#downloadOnce(next.href, destAbs, extraCa, scoped, authorize, redirects + 1),
+          ));
         }
         if (res.statusCode !== 200) {
           res.resume();
@@ -231,6 +279,93 @@ export class NodeHost {
       this.#rootCAs = null;
     }
     return this.#rootCAs;
+  }
+
+  /** 竞争者分别登记进程和随机标识，崩溃遗留的登记由下一次操作清理。 */
+  async withPackLock(directory, action) {
+    const locks = path.join(directory, 'locks');
+    await fsp.mkdir(locks, { recursive: true, mode: 0o700 });
+    const id = String(process.pid) + '-' + crypto.randomUUID();
+    const claim = path.join(locks, id);
+    await fsp.writeFile(claim, '', { flag: 'wx', mode: 0o600 });
+    try {
+      for (const peer of await fsp.readdir(locks)) {
+        if (peer === id) {
+          continue;
+        }
+        const match = /^([1-9][0-9]*)-[\da-f-]{36}$/.exec(peer);
+        if (!match) {
+          throw new Error('更新锁目录中存在无法识别的记录');
+        }
+        try {
+          process.kill(Number(match[1]), 0);
+        } catch (error) {
+          if (error.code === 'ESRCH') {
+            await fsp.rm(path.join(locks, peer), { force: true });
+            continue;
+          }
+          if (error.code !== 'EPERM') {
+            throw error;
+          }
+        }
+        throw new Error('另一项整合包操作正在使用此 DSH_HOME，请稍后重试');
+      }
+      return await action();
+    } finally {
+      await fsp.rm(claim, { force: true });
+    }
+  }
+
+  /** 更新前必须区分路径缺失、权限错误与符号链接。 */
+  /** 返回普通文件的 POSIX 权限；Windows 无法表达 Git 执行位。 */
+  async packFileMode(abs) {
+    if (process.platform === 'win32') return null;
+    const stat = await fsp.lstat(abs);
+    if (!stat.isFile()) throw new Error('权限目标必须是普通文件');
+    return stat.mode & 0o777;
+  }
+
+  /** 仅在具有 POSIX 权限的文件系统设置普通文件的访问位。 */
+  async chmodPackFile(abs, mode) {
+    if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new Error('无效的文件权限');
+    if (process.platform === 'win32') return;
+    if (!(await fsp.lstat(abs)).isFile()) throw new Error('权限目标必须是普通文件');
+    await fsp.chmod(abs, mode);
+  }
+
+  async packEntryType(abs) {
+    try {
+      const entry = await fsp.lstat(abs);
+      if (entry.isSymbolicLink()) {
+        return 'symlink';
+      }
+      return entry.isFile() ? 'file' : entry.isDirectory() ? 'dir' : 'other';
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** 回滚时只移除本次创建且仍为空的目录。 */
+  async removePackDirIfEmpty(abs) {
+    try {
+      await fsp.rmdir(abs);
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) {
+        throw error;
+      }
+    }
+  }
+
+  /** 复制受管文件时保留普通文件权限，凭据备份仅向当前用户开放。 */
+  async copyPackFile(from, to, privateCopy = false) {
+    await fsp.mkdir(path.dirname(to), { recursive: true, mode: 0o700 });
+    await fsp.copyFile(from, to);
+    if (privateCopy) {
+      await fsp.chmod(to, 0o600);
+    }
   }
 
   async move(from, to) {

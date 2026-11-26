@@ -46,13 +46,14 @@ function registerIpc() {
     if (/^https?:\/\//i.test(p)) {
       const { path, tempDir } = await core.resolvePackSource(host, p);
       try {
-        return await core.inspectPack(host, path);
+        return await core.inspectPack(host, path, {includeIcons:true});
       } finally {
         if (tempDir) await host.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
     }
-    return core.inspectPack(host, p);
+    return core.inspectPack(host, p, {includeIcons:true});
   });
+  ipcMain.handle('export:choices', (_e, options) => core.exportChoices(host, options));
   ipcMain.handle('profiles:list', () => core.discoverProfiles(host));
   ipcMain.handle('profiles:export', (_e, opts) => core.packProfile(host, opts.profile, opts));
   ipcMain.handle('profiles:exportRepo', async (_e, opts) => {

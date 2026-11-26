@@ -1,4 +1,4 @@
-// 导出「源仓库」（v5 源形态）：把 Profile 物化为可二次开发 / 重打包的 git 仓库。
+// 导出「源仓库」（v6 源形态）：把 Profile 物化为可二次开发 / 重打包的 git 仓库。
 // 三档内容（opts.content，默认 readme）：
 //   - manifest：仅清单（manifest.json）
 //   - readme  ：清单 + README.md
@@ -6,9 +6,50 @@
 // 仓库目录名 = <out>/<name>（不带版本号）；release/ 始终产出 .dspack + .sha256（gitignore 不入库）；
 // 首次 git init + commit，之后每次导出增量 commit；同版本 release 冲突抛 ReleaseConflictError。
 // 布局遵循 pack-structure v3：机器文件进根目录，其余用户文件进 overrides/。
-import { scanProfile, selectFiles } from './scan.js';
-import { buildManifest, resolveLocale } from './manifest.js';
-import { dspackEntryPath, packProfile } from './pack.js';
+import { resolveLocale } from './manifest.js';
+import { prepareProfileArchive, writeProfileArchive } from './pack.js';
+
+// 发布清单和内嵌图标可单独浏览。其余归档条目仅随完整源码发布。
+function sourceEntries(entries, content) {
+  return Object.fromEntries(Object.entries(entries).filter(([path]) =>
+    path !== 'manifest.json' && (content === 'full' || path.startsWith('assets/plugins/')),
+  ));
+}
+
+async function checkedSourcePath(host, root, relative) {
+  const parts = relative.split('/');
+  if (!parts.length || parts.some((part) => !part || part === '.' || part === '..' || /[\\:\x00-\x1f]|[. ]$/u.test(part) || part.toLowerCase() === '.git') || parts[0].toLowerCase() === 'release') {
+    throw new Error('源仓库文件路径无效');
+  }
+  let path = root;
+  for (const part of parts) {
+    if (await host.packEntryType(path) === 'symlink') throw new Error('源仓库路径包含链接：' + relative);
+    path = host.joinPath(path, part);
+  }
+  if (await host.packEntryType(path) === 'symlink') throw new Error('源仓库路径包含链接：' + relative);
+  return path;
+}
+
+// 只清理上次导出写入且内容未变的文件。手动修改过的旧资源须由作者决定是否继续发布。
+async function planSourceFiles(host, root, inventoryFile, next) {
+  const saved = await host.readTextFile(inventoryFile);
+  const previous = saved ? JSON.parse(saved) : {};
+  const remove = [];
+  const hashes = Object.create(null);
+  for (const [rel, data] of Object.entries(next)) {
+    await checkedSourcePath(host, root, rel);
+    hashes[rel] = await host.sha256(data);
+  }
+  for (const [rel, hash] of Object.entries(previous)) {
+    if (Object.hasOwn(hashes, rel)) continue;
+    const path = await checkedSourcePath(host, root, rel);
+    const data = await host.readFile(path);
+    if (!data) continue;
+    if (await host.sha256(data) !== hash) throw new Error('上次发布的文件已被手动修改，请核对后再导出：' + rel);
+    remove.push(path);
+  }
+  return { hashes, remove };
+}
 
 /** 合法内容档。 */
 export const REPO_CONTENT_LEVELS = ['manifest', 'readme', 'full'];
@@ -31,9 +72,8 @@ export const REPO_CONTENT_LABEL = {
  */
 export async function exportRepo(host, profile, opts = {}) {
   const content = REPO_CONTENT_LEVELS.includes(opts.content) ? opts.content : 'readme';
-  const scan = await scanProfile(host, profile.dir);
-  const files = selectFiles(scan.files, opts.include);
-  const manifest = await buildManifest(host, profile, opts, scan);
+  const archive = await prepareProfileArchive(host, profile, opts);
+  const { manifest, entries, scan } = archive;
 
   const parent = opts.out ? host.resolvePath(opts.out) : host.cwd();
   const repoDir = host.joinPath(parent, manifest.name); // 仓库名不带版本号
@@ -49,9 +89,21 @@ export async function exportRepo(host, profile, opts = {}) {
 
   // 先产 release，拿到 .dspack 校验和写进仓库根部的清单（清单在 .dspack 之外，不构成循环）；
   // .dspack 内部的 manifest（由 packProfile 生成）不带该字段。
+  for (const dir of [repoDir, releaseDir]) {
+    if (await host.packEntryType(dir) === 'symlink') throw new Error('源仓库输出目录不能是链接');
+  }
+  const inventoryFile = host.joinPath(releaseDir, '.source-files.json');
+  for (const generated of [inventoryFile, releasePath, releasePath + '.sha256']) {
+    if (await host.packEntryType(generated) === 'symlink') throw new Error('源仓库产物不能写入链接');
+  }
+  for (const file of ['manifest.json', 'README.md', '.gitignore', '.dspackignore']) {
+    await checkedSourcePath(host, repoDir, file);
+  }
+  const source = sourceEntries(entries, content);
+  const { hashes, remove } = await planSourceFiles(host, repoDir, inventoryFile, source);
   let release = null;
   if (!(opts.replaceRelease === 'skip' && releaseExists)) {
-    const pack = await packProfile(host, profile, {
+    const pack = await writeProfileArchive(host, archive, {
       ...opts,
       out: releaseDir,
       force: opts.replaceRelease === true,
@@ -80,14 +132,13 @@ export async function exportRepo(host, profile, opts = {}) {
   if (content === 'full') {
     ignored = renderDspackIgnore();
     await writeText('.dspackignore', ignored);
-    for (const f of files) {
-      const data = await host.readFile(f.abs);
-      if (!data) continue;
-      const dest = dspackEntryPath(f.rel); // 机器文件→根；其余→overrides/
-      await host.writeFile(host.joinPath(repoDir, ...dest.split('/')), data);
-      written.push(dest);
-    }
   }
+  for (const path of remove) await host.rm(path, { recursive: false, force: true });
+  for (const [dest, data] of Object.entries(source)) {
+    await host.writeFile(host.joinPath(repoDir, ...dest.split('/')), data);
+    written.push(dest);
+  }
+  await host.writeTextFile(inventoryFile, JSON.stringify(hashes));
 
   // 4) .gitignore（所有档：release 产物不入版本管理）
   await writeText('.gitignore', renderGitignore());
@@ -127,20 +178,27 @@ export function renderGitignore() {
 
 /** git init + add + commit；无 git 或提交无变更时降级（不算失败）。 */
 async function commitRepo(host, repoDir, manifest) {
-  // 无空格（Windows shell:true 下带空格的消息会被拆成多个 pathspec）
   const message = `export:${manifest.name}@${manifest.version}`;
+  const runGit = async (args) => {
+    if (typeof host.git === 'function') {
+      const result = await host.git(args, {cwd:repoDir});
+      return result;
+    }
+    if (args.some(arg => /[^a-zA-Z0-9_.:@+\/-]/u.test(arg))) throw new Error('当前宿主不能安全传递 Git 参数');
+    return host.exec('git', args, {cwd:repoDir});
+  };
   let gitOk = false;
   try {
-    const r = await host.exec('git', ['--version'], { cwd: repoDir });
+    const r = await runGit(['--version']);
     gitOk = r?.status === 0;
   } catch { gitOk = false; }
   if (!gitOk) return { initialized: false, committed: false, reason: 'git 不可用' };
 
   const dotGit = host.joinPath(repoDir, '.git');
   const existed = (await host.stat(dotGit)) != null;
-  if (!existed) await host.exec('git', ['init'], { cwd: repoDir });
-  await host.exec('git', ['add', '-A'], { cwd: repoDir });
-  const r = await host.exec('git', ['commit', '-m', message], { cwd: repoDir });
+  if (!existed) await runGit(['init']);
+  await runGit(['add', '-A']);
+  const r = await runGit(['commit', '-m', message]);
   const committed = r?.status === 0;
   return { initialized: !existed, committed, reason: committed ? '' : '无变更或提交失败' };
 }

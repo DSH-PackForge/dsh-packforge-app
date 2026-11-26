@@ -1,11 +1,13 @@
+import { reviewImport } from './import-review.js';
 import { parseArgs } from 'node:util';
 import { NodeHost } from '@dsh-packforge/host-node';
 import {
+  exportChoices,
   discoverProfiles,
   discoverHomes,
   resolveProfileInput,
   listInstalledDshVersions,
-  packHome,
+  exportHomeFromWorkspace,
   inspectProfile,
   inspectPack,
   installPack,
@@ -19,7 +21,7 @@ import {
 
 const VERSION = '0.1.1';
 
-const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v5 + pack-structure v3）
+const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v6 + pack-structure v4）
 
 用法:
   dspack <command> [options]
@@ -31,6 +33,8 @@ const HELP = `dspack v${VERSION} — DSH 整合包 .dspack 工具（manifest v5 
   pack-home <home>    一键导出整个 DSH_HOME 为 .dspack 整合包（dshhome）
   inspect <profile>   打包前预览（将包含/排除哪些文件、manifest 内容）
   view <source>        查看一个已有的 .dspack（本地路径或 URL）
+  update <source>     预览并更新已有整合包，保留本地改动
+  resources <dir>     列出插件与资源候选项（--home 扫描整个 DSH_HOME）
   install <source>    一键安装 .dspack 整合包（本地路径或 URL）
   market [<index>]    浏览市场索引（列出整合包 / 格式 / 下载源）
   version             显示版本
@@ -60,7 +64,12 @@ market 选项:
   --json                  以 JSON 输出市场条目（默认官方远端，可用位置参数或 $env:DSHPACK_MARKET_INDEX 覆盖）
   --detail <name|id>     懒加载某个整合包的完整 manifest + README（来自 packs/<owner>.<repo>/）
 
-install 选项:
+pack / inspect 可用 --home <path> 指定配置档所属的 DSH_HOME。
+pack / pack-home 可用 --config <file> 提供 selection 和逐版本插件配置。
+
+install / update 选项:
+  --skip-resource <key>    跳过指定资源，可重复使用；预览会列出资源键
+  --previous <path> --previous-sha256 <hex>    从已知旧包重建首次升级基线
   --name <slug>           安装后的 Profile 目录名（默认取 manifest）
   --registry <url>        pnpm 安装依赖时的镜像源
   --profiles-root <path>  安装目标根（默认 ~/.dsh/profiles）
@@ -102,6 +111,10 @@ export async function main(argv) {
         return await runInspect(host, rest);
       case 'view':
         return await runView(host, rest);
+      case 'update':
+        return await runInstall(host, rest, true);
+      case 'resources':
+        return await runResources(host, rest);
       case 'install':
         return await runInstall(host, rest);
       case 'market':
@@ -165,6 +178,7 @@ async function runHomes(host) {
 async function runPackHome(host, args) {
   const { values, positionals } = parse(
     {
+      config: { type: 'string' },
       name: { type: 'string' },
       'display-name': { type: 'string' },
       version: { type: 'string' },
@@ -202,13 +216,14 @@ async function runPackHome(host, args) {
   }
   if (!home) throw new Error(`找不到 DSH_HOME「${input ?? ''}」。${homesHint(await discoverHomes(host))}`);
 
-  let dshVersion = values['dsh-version'];
+  let dshVersion = values['dsh-version'] || (await loadWorkspaceConfig(host, home.dir))?.dshVersion;
   if (!dshVersion) {
     const versions = await listInstalledDshVersions(host);
     dshVersion = versions[0] || '';
   }
 
-  const result = await packHome(host, home, {
+  const result = await exportHomeFromWorkspace(host, home, {
+    ...(await readAuthorConfig(host, values.config)),
     name: values.name,
     displayName: values['display-name'],
     version: values.version,
@@ -230,7 +245,7 @@ async function runPackHome(host, args) {
   log(`  dsh 版本 : ${m.dshVersion || '（未钉定）'}`);
   log(`  profile  : ${Object.keys(m.profiles).length} 个（默认 ${m.defaultProfile}）`);
   log(`  preset   : ${Object.keys(m.presets ?? {}).length} 个`);
-  log(`  skill    : ${(m.skills ?? []).length} 个`);
+  log(`  skill    : ${(m.resources?.['skill.json'] || m.skills || []).length} 个`);
   log(`  指令     : ${m.instructions}`);
   log(`  包含文件 : ${result.included}（排除 ${result.excluded}）`);
   log(`  输出     : ${result.output} (${formatBytes(result.size)})`);
@@ -244,6 +259,8 @@ function homesHint(homes) {
 async function runPack(host, args) {
   const { values, positionals } = parse(
     {
+      home: { type: 'string' },
+      config: { type: 'string' },
       name: { type: 'string' },
       'display-name': { type: 'string' },
       version: { type: 'string' },
@@ -272,6 +289,8 @@ async function runPack(host, args) {
   }
 
   const result = await exportFromWorkspace(host, profile, {
+    home: values.home,
+    ...(await readAuthorConfig(host, values.config)),
     name: values.name,
     displayName: values['display-name'],
     version: values.version,
@@ -310,11 +329,11 @@ async function runPack(host, args) {
 }
 
 async function runInspect(host, args) {
-  const { values, positionals } = parse({ json: { type: 'boolean' } }, args);
+  const { values, positionals } = parse({ json: { type: 'boolean' }, home: { type: 'string' } }, args);
   const profile = await resolveProfileInput(host, positionals[0]);
   if (!profile) throw new Error(`找不到 Profile「${positionals[0] ?? ''}」。${profileHint(await discoverProfiles(host))}`);
 
-  const { files, excluded, manifest, special } = await inspectProfile(host, profile);
+  const { files, excluded, manifest, special } = await inspectProfile(host, profile, {home: values.home});
 
   if (values.json) {
     log(JSON.stringify({ profile: profile.dir, manifest, files, excluded, special }, null, 2));
@@ -373,8 +392,14 @@ async function runView(host, args) {
     log(`  展示名   : ${renderLocale(m.displayName)}`);
     log(`  dsh 版本 : ${m.dshVersion || '（未钉定）'}`);
     log(`  类型     : ${m.type}`);
-    log(`  层栈     : ${m.bundles.length} 个 bundle`);
-    log(`  依赖     : ${Object.keys(m.dependencies ?? {}).length} 个`);
+    const units = m.type === 'dshhome' ? Object.entries(m.profiles || {}) : [[m.profileName || m.name,m]];
+    for (const [profile, unit] of units) {
+      log('  ' + profile + ' · ' + (unit.bundles?.length || 0) + ' 个 bundle，' + Object.keys(unit.dependencies || {}).length + ' 个依赖');
+      for (const [id, plugin] of Object.entries(unit.plugins || {})) {
+        log('    ' + id + ' · ' + renderLocale(plugin.name || id) + (plugin.desc ? ' · ' + renderLocale(plugin.desc) : '') + (plugin.source ? ' · ' + plugin.source.registry : ''));
+      }
+    }
+    for (const [file, rows] of Object.entries(m.resources || {})) if (Array.isArray(rows)) log('  ' + file + ' · ' + rows.length + ' 项');
     log(`  重内容   : ${(m.files ?? []).length} 个 files[] 条目`);
   }
   if (r.machine.length) {
@@ -444,19 +469,37 @@ async function runMarket(host, args) {
 
   log(`市场共 ${packs.length} 个整合包：`);
   for (const p of packs) {
-    const fmt = p.format === 'dspack' ? '.dspack v5' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
+    const fmt = p.format === 'dspack' ? '.dspack' : p.format === 'tgz' ? '.tgz（旧 v3）' : '未知格式';
     log(`  ${p.displayName || p.name}  [${fmt}]  ${p.name}@${p.version}  dsh ${p.dshVersion || '?'}`);
     if (p.description) log(`    ${p.description}`);
     if (p.downloadUrl) log(`    下载  ${p.downloadUrl}${p.sha256 ? `  (sha256 ${short(p.sha256)})` : ''}`);
   }
 }
 
-async function runInstall(host, args) {
+async function runResources(host, args) {
+  const { values, positionals } = parse({ home: { type: 'boolean' } }, args);
+  if (!positionals[0]) throw new Error('请指定配置档或 DSH_HOME 目录');
+  const dir = host.resolvePath(positionals[0]);
+  const location = { name: host.basename(dir), dir };
+  log(JSON.stringify(await exportChoices(host, values.home ? { home: location } : { profile: location }), null, 2));
+}
+
+async function readAuthorConfig(host, file) {
+  if (!file) return {};
+  const config = JSON.parse(await host.readTextFile(host.resolvePath(file)));
+  if (!config || Array.isArray(config) || typeof config !== 'object') throw new Error('打包配置必须是 JSON 对象');
+  return { selection: config.selection, plugins: config.plugins, profilePlugins: config.profilePlugins };
+}
+
+async function runInstall(host, args, update = false) {
   const { values, positionals } = parse(
     {
       name: { type: 'string' },
       registry: { type: 'string' },
       'profiles-root': { type: 'string' },
+      previous: { type: 'string' },
+      'previous-sha256': { type: 'string' },
+      'skip-resource': { type: 'string', multiple: true },
       home: { type: 'string' },
       sha256: { type: 'string' },
       size: { type: 'string' },
@@ -477,7 +520,9 @@ async function runInstall(host, args) {
     throw new Error(`--timeout 必须是正整数（毫秒）：${values.timeout}`);
   }
 
-  const result = await installPack(host, {
+  const result = await reviewImport(host, installPack, {
+    decisions: Object.fromEntries((values['skip-resource'] || []).map(key => [key, 'skip'])),
+    update, previousSource: values.previous, previousSha256: values['previous-sha256'],
     source: positionals[0],
     profilesRoot: values['profiles-root'],
     home: values.home,
@@ -502,11 +547,12 @@ async function runInstall(host, args) {
     }
     log(`  名称    : ${result.manifest.name}@${result.manifest.version}`);
     log(`  dsh     : ${result.manifest.dshVersion || '未钉定'}`);
-    if (result.exists) log(`  已存在  : 是（真实安装需 --force 覆盖）`);
+    if (result.exists && result.manifest.manifestVersion < 6 && !update) log(`  已存在  : 是（真实安装需 --force 覆盖）`);
     return;
   }
 
-  log('✓ 整合包安装完成');
+  log(update ? '✓ 整合包更新完成' : '✓ 整合包安装完成');
+  for (const item of result.items || []) if (item.skipped) log('  已跳过：' + item.id);
   if (result.type === 'dshhome') {
     log(`  DSH_HOME  : ${result.dir}`);
     log(`  profile   : ${result.profiles.join(', ')}（默认 ${result.defaultProfile}）`);

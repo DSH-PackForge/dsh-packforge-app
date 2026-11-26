@@ -1,11 +1,13 @@
-// manifest v5 契约（最新目标规范，见 DSH-PackForge/specs/manifest/v5.md）。
+import { validatePluginMetadata } from './plugin-metadata.js';
+import { installedPluginSource } from './registry.js';
+// 新导出使用 manifest v6，已有 v4/v5 清单按各自版本解析。
 // v5 = v4 全部硬约束（依赖坐标钉死精确版本/commit sha、dshVersion 精确、多语言元数据、files[]）
 //      + type 区分形态："profile"（单包）/ "dshhome"（整机，含 profiles/presets/skills/instructions）。
 
 const ICON_PATTERN = /^icons?\/.+\.(png|jpe?g|webp|ico|svg)$/i;
 
 /**
- * 从 Profile 生成 manifest v5（type: "profile"）。
+ * 从 Profile 生成 manifest v6（type: "profile"）。
  * @param {Host} host 用于读取 package.json 与 cordis.patch.yml
  * @param {{name: string, dir: string}} profile
  * @param {object} opts { name, displayName, version, description, author, icon, dshVersion, profileName, files }
@@ -24,7 +26,7 @@ export async function buildManifest(host, profile, opts = {}, scan = { files: []
   const patch = (await host.readTextFile(host.joinPath(profile.dir, 'cordis.patch.yml'))) ?? '';
 
   return {
-    manifestVersion: 5,
+    manifestVersion: 6,
     type: 'profile',
     name,
     version,
@@ -35,7 +37,7 @@ export async function buildManifest(host, profile, opts = {}, scan = { files: []
     dshVersion,
     profileName: opts.profileName || profile.name,
     bundles: extractBundles(pkg),
-    dependencies: await coordinatesFromProfileDeps(host, profile.dir, pkg?.dependencies),
+    dependencies: await coordinatesFromProfileDeps(host, profile.dir, pkg?.dependencies, pkg),
     patch,
     files: opts.files ?? [],
   };
@@ -47,13 +49,13 @@ async function buildProfileUnit(host, profileDir) {
   const patch = (await host.readTextFile(host.joinPath(profileDir, 'cordis.patch.yml'))) ?? '';
   return {
     bundles: extractBundles(pkg),
-    dependencies: await coordinatesFromProfileDeps(host, profileDir, pkg?.dependencies),
+    dependencies: await coordinatesFromProfileDeps(host, profileDir, pkg?.dependencies, pkg),
     patch,
   };
 }
 
 /**
- * 从 home 根 + 要导出的 profile 列表生成 manifest v5（type: "dshhome"）。
+ * 从 home 根与选中的 profile 构建 manifest v6（type: "dshhome"）。
  * 四类单元：profiles（有依赖坐标）+ presets / skills / instructions（纯文件索引）。
  * @param {Host} host
  * @param {{name:string, dir:string}} home home 根目录
@@ -68,7 +70,7 @@ export async function buildHomeManifest(host, home, opts = {}) {
   }
   const names = Object.keys(profiles);
   return {
-    manifestVersion: 5,
+    manifestVersion: 6,
     type: 'dshhome',
     name: sanitizeSlug(opts.name || home.name),
     version: opts.version || '1.0.0',
@@ -214,11 +216,16 @@ export function isExactSemver(v) {
  *   都没有则标记为 `latest`（安装时跟随默认分支最新，不强制钉 sha）；
  * - npm 依赖若仍是范围（^/~ 等），读 node_modules/<name>/package.json 的实测版本钉精确。
  */
-export async function coordinatesFromProfileDeps(host, dir, deps) {
+export async function coordinatesFromProfileDeps(host, dir, deps, profile = {}) {
   if (!deps || typeof deps !== 'object' || Array.isArray(deps)) return {};
   const lockText = await host.readTextFile(host.joinPath(dir, 'pnpm-lock.yaml'));
   const out = {};
   for (const [pkgName, spec] of Object.entries(deps)) {
+    const source = installedPluginSource(profile, pkgName);
+    if (source) {
+      out[pkgName] = source.version;
+      continue;
+    }
     const git = parsePkgGitSpec(spec);
     if (git) {
       // 不强制钉 sha：spec 里的 #sha 优先，其次 pnpm-lock 的 resolution.commit；都没有则标记 latest（跟随默认分支最新）。
@@ -325,11 +332,11 @@ export function validateManifest(m) {
   const errors = [];
   if (!m || typeof m !== 'object' || Array.isArray(m)) return ['manifest.json 缺失或不是对象'];
 
-  if (m.manifestVersion !== 4 && m.manifestVersion !== 5) {
+  if (![4, 5, 6].includes(m.manifestVersion)) {
     if (m.manifestVersion === 3 || m.manifestVersion === 2) {
-      errors.push(`manifestVersion 为 ${m.manifestVersion}（旧版 .tgz 格式），本工具仅安装 v4/v5(.dspack) 整合包`);
+      errors.push(`manifestVersion 为 ${m.manifestVersion}（旧版 .tgz 格式），本工具仅安装 v4/v5/v6(.dspack) 整合包`);
     } else {
-      errors.push('manifestVersion 必须为 4 或 5');
+      errors.push('manifestVersion 必须为 4、5 或 6');
     }
   }
 
@@ -342,9 +349,28 @@ export function validateManifest(m) {
     if (m[f] !== undefined && !isLocaleString(m[f])) errors.push(`manifest.${f} 必须是字符串或多语言对象`);
   }
 
-  if (m.manifestVersion === 5) {
+  if (m.manifestVersion === 6) {
+    for (const key of ['name','version']) {
+      if (typeof m[key] === 'string' && (/[\\/:*?"<>|\x00-\x1f]|[. ]$/u.test(m[key]) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(m[key]))) {
+        errors.push('manifest.' + key + ' 包含不能用于发布文件名的字符');
+      }
+    }
+    if (m.type === 'dshhome') {
+      if (m.plugins !== undefined) {
+        errors.push('dshhome 的 plugins 必须位于对应的 profiles 条目内');
+      }
+      for (const [id, unit] of Object.entries(m.profiles || {})) {
+        for (const error of validatePluginMetadata(unit)) {
+          errors.push('profiles[' + id + '].' + error);
+        }
+      }
+    } else {
+      errors.push(...validatePluginMetadata(m));
+    }
+  }
+  if (m.manifestVersion === 5 || m.manifestVersion === 6) {
     if (m.type === 'dshhome') errors.push(...validateDshHome(m));
-    else if (m.type === undefined || m.type === 'profile') errors.push(...validateProfile(m));
+    else if ((m.manifestVersion === 5 && m.type === undefined) || m.type === 'profile') errors.push(...validateProfile(m));
     else errors.push('type 仅支持 "profile" 或 "dshhome"');
   } else {
     errors.push(...validateProfile(m));
