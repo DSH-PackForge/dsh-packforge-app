@@ -16,6 +16,13 @@ const text = (t) => [{ type: 'text', text: String(t) }];
 
 const card = (title) => (args) => ({ card: 'generic', title, kind: 'other', rawInput: args });
 
+const optionalBoolean = (description) => ({
+  oneOf: [{ type: 'boolean' }, { type: 'string', const: '' }],
+  description,
+});
+
+const optionalValue = (value) => value === '' ? undefined : value;
+
 /* ------------------------------------------------------------------ */
 /* dspack_list: 发现可用的 profile                                       */
 /* ------------------------------------------------------------------ */
@@ -85,9 +92,9 @@ const dspackExport = {
       name: { type: 'string', description: '覆盖整合包 name（slug）' },
       version: { type: 'string', description: '覆盖版本号' },
       dshVersion: { type: 'string', description: '钉定 DSH 版本（缺省读 .dshpkcfg，再取已安装最新）' },
-      force: { type: 'boolean', description: '输出文件已存在时覆盖' },
-      mode: { type: 'string', enum: ['dspack', 'repo'], description: '导出形态，缺省读 .dshpkcfg.mode，再缺省 dspack' },
-      content: { type: 'string', enum: ['manifest', 'readme', 'full'], description: '仓库内容档（仅 mode=repo）' },
+      force: optionalBoolean('输出文件已存在时覆盖'),
+      mode: { type: 'string', enum: ['dspack', 'repo', ''], description: '导出形态，缺省读 .dshpkcfg.mode，再缺省 dspack' },
+      content: { type: 'string', enum: ['manifest', 'readme', 'full', ''], description: '仓库内容档（仅 mode=repo）' },
     },
     required: ['profile'],
   },
@@ -121,13 +128,13 @@ const dspackExport = {
       throw new Error(`找不到 profile「${args.profile ?? ''}」。可用：${names || '（无）'}`);
     }
     const r = await exportFromWorkspace(host, profile, {
-      out: args.out,
-      name: args.name,
-      version: args.version,
-      dshVersion: args.dshVersion,
+      out: optionalValue(args.out),
+      name: optionalValue(args.name),
+      version: optionalValue(args.version),
+      dshVersion: optionalValue(args.dshVersion),
       force: args.force === true,
-      mode: args.mode,
-      content: args.content,
+      mode: optionalValue(args.mode),
+      content: args.mode === 'dspack' ? undefined : optionalValue(args.content),
     });
     if (r.output) {
       return {
@@ -223,9 +230,9 @@ const dspackInstall = {
       source: { type: 'string', description: '.dspack 本地路径或 http(s) URL' },
       name: { type: 'string', description: '覆盖 profile 名' },
       profilesRoot: { type: 'string', description: 'profiles 根目录，缺省 ~/.dsh/profiles' },
-      force: { type: 'boolean', description: '同名 profile 已存在时覆盖' },
-      dryRun: { type: 'boolean', description: '只校验不落盘' },
-      noInstall: { type: 'boolean', description: '跳过 pnpm install' },
+      force: optionalBoolean('同名 profile 已存在时覆盖'),
+      dryRun: optionalBoolean('只校验不落盘'),
+      noInstall: optionalBoolean('跳过 pnpm install'),
     },
     required: ['source'],
   },
@@ -253,8 +260,8 @@ const dspackInstall = {
     const host = getHost();
     const r = await installPack(host, {
       source: args.source,
-      name: args.name,
-      profilesRoot: args.profilesRoot,
+      name: optionalValue(args.name),
+      profilesRoot: optionalValue(args.profilesRoot),
       force: args.force === true,
       dryRun: args.dryRun === true,
       noInstall: args.noInstall === true,
